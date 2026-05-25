@@ -1,0 +1,8 @@
+export cn.enaium.Answer
+    -> package cn.enaium.dto
+
+input AnswerView {
+    content
+    createdTime
+    modifiedTime
+}

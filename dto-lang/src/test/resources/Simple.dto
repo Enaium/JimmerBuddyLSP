@@ -1,0 +1,29 @@
+export cn.enaium.model.Simple
+    -> package cn.enaium.model.dto
+
+SimpleView {
+    prop1
+    object1 {
+        prop1
+        prop2
+        prop3
+        object2 {
+            object3 {
+                prop1
+                prop2
+                prop3
+
+            }
+
+        }
+
+    }
+
+}
+
+input SimpleView {
+    prop1
+    prop2
+    prop3
+
+}

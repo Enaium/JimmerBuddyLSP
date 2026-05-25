@@ -1,0 +1,14 @@
+export cn.enaium.model.Space
+    -> package cn.enaium.model.dto
+
+@ KotlinDto
+SimpleView {
+# allScalars
+
+    fun ( prop1 ,  prop2 ,prop3 )
+
+object1{
+    object2{
+        }
+    }
+}

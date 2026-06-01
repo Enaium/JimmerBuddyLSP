@@ -31,7 +31,7 @@ import kotlin.io.path.*
 /**
  * @author Enaium
  */
-class JavaSourceProcessor(val sourceDirOrJar: List<Path>, classes: Map<String, ClassNode> = mapOf()) {
+class JavaSourceProcessor(val sourceDirOrJar: Set<Path>, classes: Map<String, ClassNode> = mapOf()) {
 
     // Qualified name to cst
     private val sourceCompilation = ConcurrentHashMap<String, PreParse>()

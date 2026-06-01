@@ -30,7 +30,7 @@ import kotlin.collections.iterator
  * @author Enaium
  */
 data class ImmutableType(
-    private val context: Context,
+    val context: Context,
     val classNode: ClassNode
 ) : BaseType {
     val superTypes: List<ImmutableType> = if (classNode is InterfaceNode) {

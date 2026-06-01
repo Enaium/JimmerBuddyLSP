@@ -1,0 +1,52 @@
+/*
+ * Copyright 2026 Enaium
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package cn.enaium.jimmer.buddy.lang.parser.utility
+
+import org.antlr.v4.runtime.ParserRuleContext
+import org.antlr.v4.runtime.RuleContext
+
+/**
+ * @author Enaium
+ */
+fun ParserRuleContext.overlaps(line: Int, column: Int): Boolean {
+    val startLine = this.start.line - 1
+    val stopLine = this.stop.line - 1
+    return if (startLine == line && stopLine == line) {
+        this.start.charPositionInLine <= column && this.stop.charPositionInLine + this.stop.text.length >= column
+    } else if (startLine == line) {
+        this.start.charPositionInLine <= column
+    } else if (stopLine == line) {
+        this.stop.charPositionInLine + this.stop.text.length >= column
+    } else {
+        line in startLine..stopLine
+    }
+}
+
+inline fun <reified T : ParserRuleContext> ParserRuleContext.findParent(): T? {
+    if (this is T) {
+        return this
+    }
+
+    var parent = this.parent
+    while (parent != null) {
+        if (parent is T) {
+            return parent
+        }
+        parent = parent.parent
+    }
+    return null
+}

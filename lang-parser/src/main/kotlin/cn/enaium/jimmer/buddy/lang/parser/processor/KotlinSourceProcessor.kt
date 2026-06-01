@@ -30,14 +30,14 @@ import kotlin.io.path.*
 /**
  * @author Enaium
  */
-class KotlinSourceProcessor(val sourceDirOrJar: List<Path>, classes: Map<String, ClassNode> = mapOf()) {
+class KotlinSourceProcessor(val sourceDirOrJar: Set<Path>, classes: Map<String, ClassNode> = mapOf()) {
 
     // Qualified name to cst
     private val sourceTopLevelObjects =
         ConcurrentHashMap<String, PreParse>()
 
     // Qualified name to ClassNode
-    private val classes = ConcurrentHashMap<String, ClassNode>(classes)
+    private val classes = ConcurrentHashMap(classes)
 
     suspend fun process() = coroutineScope {
         classes.putAll(JavaSourceProcessor(sourceDirOrJar).process())

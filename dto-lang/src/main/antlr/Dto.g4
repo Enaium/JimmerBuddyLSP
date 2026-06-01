@@ -60,7 +60,7 @@ importedType
     ;
 
 alias
-    : AS Identifier
+    : AS name = Identifier
     ;
 
 dtoType
@@ -97,7 +97,7 @@ explicitProp
 macro
     :
     HASH name = Identifier
-    (LEFT_PARENTHESIS qualifiedName (COMMA qualifiedName)* RIGHT_PARENTHESIS)?
+    (LEFT_PARENTHESIS args += qualifiedName (COMMA args += qualifiedName)* RIGHT_PARENTHESIS)?
     (QUESTION_MARK | EXCLAMATION_MARK)?
     ;
 

@@ -41,10 +41,10 @@ import kotlin.io.path.*
  * @author Enaium
  */
 class Environment {
-    val directories = mutableListOf<Path>()
-    val modules = mutableListOf<Module>()
+    val directories = mutableSetOf<Path>()
+    val modules = mutableSetOf<Module>()
     val classes = mutableMapOf<String, ClassNode>()
-    val dependencies = mutableListOf<Path>()
+    val dependencies = mutableSetOf<Path>()
 
     var isJimmerProject = false
     var isJavaProject = false

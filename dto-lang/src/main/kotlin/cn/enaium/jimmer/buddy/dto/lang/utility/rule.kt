@@ -16,21 +16,24 @@
 
 package cn.enaium.jimmer.buddy.dto.lang.utility
 
+import cn.enaium.jimmer.buddy.dto.lang.DtoParser
 import org.antlr.v4.runtime.ParserRuleContext
+import org.antlr.v4.runtime.RuleContext
 
 /**
  * @author Enaium
  */
-fun ParserRuleContext.overlaps(line: Int, column: Int): Boolean {
-    val startLine = this.start.line - 1
-    val stopLine = this.stop.line - 1
-    return if (startLine == line && stopLine == line) {
-        this.start.charPositionInLine <= column && this.stop.charPositionInLine >= column
-    } else if (startLine == line) {
-        this.start.charPositionInLine <= column
-    } else if (stopLine == line) {
-        this.stop.charPositionInLine >= column
-    } else {
-        line in startLine..stopLine
+
+fun ParserRuleContext.findPropTrace(): List<String> {
+    val trace = mutableListOf<String>()
+    var parent: RuleContext? = this.parent
+    while (parent != null) {
+        if (parent is DtoParser.PositivePropContext) {
+            parent.prop?.text?.also {
+                trace.add(it)
+            }
+        }
+        parent = parent.parent
     }
+    return trace.reversed()
 }

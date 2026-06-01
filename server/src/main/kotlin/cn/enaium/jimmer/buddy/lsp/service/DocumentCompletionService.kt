@@ -16,8 +16,10 @@
 
 package cn.enaium.jimmer.buddy.lsp.service
 
+import cn.enaium.jimmer.buddy.dto.lang.DtoParser
 import cn.enaium.jimmer.buddy.dto.lang.DtoProcessor
 import cn.enaium.jimmer.buddy.dto.lang.utility.PropType
+import cn.enaium.jimmer.buddy.dto.lang.utility.findPropTrace
 import cn.enaium.jimmer.buddy.dto.lang.utility.type
 import cn.enaium.jimmer.buddy.lang.parser.node.AnnotationClassNode
 import cn.enaium.jimmer.buddy.lsp.document.DocumentManager
@@ -49,6 +51,7 @@ class DocumentCompletionService(val project: Project, val documentManager: Docum
             return@future when (triggerChar) {
                 "*" -> params.star(document)
                 "@" -> params.at(document)
+                "#" -> params.hash(document)
                 null -> params.type(document)
                 else -> null
             }?.let { Either.forLeft(it) } ?: Either.forLeft(emptyList())
@@ -123,15 +126,38 @@ class DocumentCompletionService(val project: Project, val documentManager: Docum
         }
     }
 
+    fun CompletionParams.hash(document: DtoDocument): List<CompletionItem> {
+        return listOf("allScalars", "allReferences").map { name ->
+            CompletionItem(name).apply {
+                kind = CompletionItemKind.Function
+                labelDetails = CompletionItemLabelDetails().apply {
+                    description = "macro"
+                }
+                insertText = "#$name"
+                insertTextFormat = InsertTextFormat.Snippet
+            }
+        }
+    }
+
     fun CompletionParams.type(document: DtoDocument): List<CompletionItem> {
         return props(document)
     }
 
     fun CompletionParams.props(document: DtoDocument): List<CompletionItem> {
-        return DtoProcessor(document.content).findProps(
-            project.environment.classes,
+        val dtoProcessor = DtoProcessor(document.content)
+        val findCursor = dtoProcessor.findCursor(
             this.position.line,
             this.position.character
+        )
+
+        if (findCursor !is DtoParser.PositivePropContext) {
+            return emptyList()
+        }
+
+        return dtoProcessor.findProps(
+            project.environment.classes,
+            document.type ?: return emptyList(),
+            findCursor.findPropTrace()
         ).mapNotNull { memberNode ->
             val prop =
                 project.environment.classes[memberNode.className]?.let { document.context.ofType(it.qualifiedName) }

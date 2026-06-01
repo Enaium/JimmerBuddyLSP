@@ -156,7 +156,7 @@ class Formatter(private val tokens: List<Token>) {
                     // Non-overlapping: before ends before after starts
                     beforeToken = snapshot.find { it.tokenIndex == beforeInstance.last }
                     afterToken = snapshot.find { it.tokenIndex == afterStart }
-                } else if (beforeInstance.first < afterStart && beforeInstance.last >= afterStart) {
+                } else if (beforeInstance.first < afterStart) {
                     // Overlapping: after starts inside before — find the last meaningful
                     // token of beforeInstance that lies before afterStart
                     beforeToken = snapshot.asSequence()
@@ -296,7 +296,7 @@ class Formatter(private val tokens: List<Token>) {
 
         val lines = text.split("\n")
         return lines.mapIndexed { idx, line ->
-            val depth = blockLineRanges.count { (start, end) -> start < idx + 1 && idx + 1 < end }
+            val depth = blockLineRanges.count { (start, end) -> idx + 1 in (start + 1)..<end }
             if (depth > 0) {
                 val indent = " ".repeat(depth * 4)
                 val trimmed = line.trimStart()

@@ -48,7 +48,7 @@ fun ParserRuleContext.range(): Range {
     return Range(this.start.position(), this.stop.position())
 }
 
-fun findProjectDir(file: Path, projects: List<Path>): Path? {
+fun findProjectDir(file: Path, projects: Set<Path>): Path? {
     return projects.find { file.startsWith(it) }
 }
 

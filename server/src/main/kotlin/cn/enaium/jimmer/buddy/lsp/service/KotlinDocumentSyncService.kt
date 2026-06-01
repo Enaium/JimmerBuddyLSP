@@ -24,7 +24,7 @@ class KotlinDocumentSyncService(project: Project, documentManager: DocumentManag
         when (type) {
             Type.CHANGE -> {
                 deq.schedule("genSource", 2000) {
-                    val process = KotlinSourceProcessor(listOf(path), project.environment.classes).process()
+                    val process = KotlinSourceProcessor(setOf(path), project.environment.classes).process()
                     project.environment.classes.putAll(process)
                     val module =
                         project.environment.modules.find { path.startsWith(it.directory) } ?: return@schedule

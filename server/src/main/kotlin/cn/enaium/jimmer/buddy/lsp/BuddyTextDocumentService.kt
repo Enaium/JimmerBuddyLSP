@@ -20,6 +20,7 @@ import cn.enaium.jimmer.buddy.lsp.document.DocumentManager
 import cn.enaium.jimmer.buddy.lsp.service.DocumentCompletionService
 import cn.enaium.jimmer.buddy.lsp.service.DocumentFoldingRangeService
 import cn.enaium.jimmer.buddy.lsp.service.DocumentFormattingService
+import cn.enaium.jimmer.buddy.lsp.service.DocumentHoverService
 import cn.enaium.jimmer.buddy.lsp.service.DocumentSemanticTokensFullService
 import cn.enaium.jimmer.buddy.lsp.service.DtoDocumentSyncService
 import cn.enaium.jimmer.buddy.lsp.service.JavaDocumentSyncService
@@ -45,6 +46,7 @@ class BuddyTextDocumentService(project: Project) : TextDocumentService {
             DtoDocumentSyncService(project, documentManager)
         )
     private val documentFormattingService = DocumentFormattingService(documentManager)
+    private val documentHoverService = DocumentHoverService(project, documentManager)
 
     override fun didOpen(params: DidOpenTextDocumentParams) {
         documentSyncServices.forEach { it.didOpen(params) }
@@ -76,5 +78,9 @@ class BuddyTextDocumentService(project: Project) : TextDocumentService {
 
     override fun formatting(params: DocumentFormattingParams): CompletableFuture<List<TextEdit>> {
         return documentFormattingService.formatting(params)
+    }
+
+    override fun hover(params: HoverParams): CompletableFuture<Hover?> {
+        return documentHoverService.hover(params)
     }
 }

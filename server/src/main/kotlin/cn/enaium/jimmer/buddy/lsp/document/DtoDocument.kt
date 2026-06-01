@@ -18,11 +18,18 @@ package cn.enaium.jimmer.buddy.lsp.document
 
 import cn.enaium.jimmer.buddy.dto.lang.Context
 import cn.enaium.jimmer.buddy.dto.lang.DtoParser
+import cn.enaium.jimmer.buddy.dto.lang.ImmutableType
 import org.antlr.v4.runtime.CommonTokenStream
 
 /**
  * @author Enaium
  */
-class DtoDocument(content: String, val context: Context, val token: CommonTokenStream, val cst: DtoParser.DtoContext) :
+class DtoDocument(
+    content: String,
+    val context: Context,
+    val type: ImmutableType?,
+    val token: CommonTokenStream,
+    val cst: DtoParser.DtoContext
+) :
     Document(content) {
 }

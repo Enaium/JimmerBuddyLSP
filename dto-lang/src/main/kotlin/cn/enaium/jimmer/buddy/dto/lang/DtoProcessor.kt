@@ -16,12 +16,12 @@
 
 package cn.enaium.jimmer.buddy.dto.lang
 
-import cn.enaium.jimmer.buddy.dto.lang.utility.overlaps
+import cn.enaium.jimmer.buddy.dto.lang.utility.findPropTrace
 import cn.enaium.jimmer.buddy.lang.parser.node.*
+import cn.enaium.jimmer.buddy.lang.parser.utility.overlaps
 import org.antlr.v4.runtime.CharStreams
 import org.antlr.v4.runtime.CommonTokenStream
 import org.antlr.v4.runtime.ParserRuleContext
-import org.antlr.v4.runtime.RuleContext
 import org.antlr.v4.runtime.tree.ErrorNode
 import org.antlr.v4.runtime.tree.ParseTreeListener
 import org.antlr.v4.runtime.tree.TerminalNode
@@ -67,41 +67,29 @@ class DtoProcessor(val source: String) {
         return results.minByOrNull { it.stop.line - it.stop.line }
     }
 
-    fun findTrace(line: Int, column: Int): List<String> {
-        val trace = mutableListOf<String>()
-        when (val cursor = findCursor(line, column)) {
-            is DtoParser.DtoBodyContext -> {
-                var parent: RuleContext? = cursor.parent
-                while (parent != null) {
-                    if (parent is DtoParser.PositivePropContext) {
-                        parent.prop?.text?.also {
-                            trace.add(it)
-                        }
-                    }
-                    parent = parent.parent
-                }
-            }
-        }
-        return trace.reversed()
+    fun findTrace(line: Int, column: Int): List<String>? {
+        val cursor = findCursor(line, column)
+        return cursor?.findPropTrace()
     }
 
-    fun findProps(classes: Map<String, ClassNode>, line: Int, column: Int): List<MemberNode> {
-        return findProps(classes, findTrace(line, column))
+    fun findProps(
+        classes: Map<String, ClassNode>,
+        immutableType: ImmutableType, line: Int, column: Int
+    ): List<MemberNode> {
+        return findProps(classes, immutableType, findTrace(line, column))
     }
 
-    fun findProps(classes: Map<String, ClassNode>, trace: List<String>): List<MemberNode> {
-        val dtoParser = DtoParser(CommonTokenStream(DtoLexer(CharStreams.fromString(source))))
-        val dto = dtoParser.dto()
-        val exportName = (XPath.findAll(dto, "/dto/exportStatement/typeParts/qualifiedName", dtoParser)
-            .firstOrNull() as? DtoParser.QualifiedNameContext)?.let {
-            it.parts.joinToString(".") { part -> part.text }
-        } ?: return emptyList<MemberNode>()
-
+    fun findProps(
+        classes: Map<String, ClassNode>,
+        immutableType: ImmutableType,
+        trace: List<String>?
+    ): List<MemberNode> {
+        trace ?: return listOf()
         if (trace.isEmpty()) {
-            return classes.getMembers(exportName)
+            return classes.getMembers(immutableType.qualifiedName)
         } else {
             val trace = ArrayDeque(trace)
-            var lastQualifiedName: String? = exportName
+            var lastQualifiedName: String? = immutableType.qualifiedName
 
             while (trace.isNotEmpty() && lastQualifiedName != null) {
                 val propName = trace.poll()
@@ -117,7 +105,13 @@ class DtoProcessor(val source: String) {
 
                         else -> null
                     }?.let { it as? ClassTypeNode }?.also {
-                        lastQualifiedName = it.qualifiedName
+                        if (it.arguments.isEmpty()) {
+                            lastQualifiedName = it.qualifiedName
+                        } else {
+                            (it.arguments.firstOrNull() as? ClassTypeNode)?.also {
+                                lastQualifiedName = it.qualifiedName
+                            }
+                        }
                     }
                 }
             }
@@ -150,5 +144,45 @@ class DtoProcessor(val source: String) {
             }
         }
         return members
+    }
+
+    fun findType(classes: Map<String, ClassNode>, trace: List<String>?, immutableType: ImmutableType): ImmutableType? {
+        trace ?: return null
+        if (trace.isEmpty()) {
+            return immutableType
+        } else {
+            val trace = ArrayDeque(trace)
+            var lastQualifiedName: String? = immutableType.qualifiedName
+
+            while (trace.isNotEmpty() && lastQualifiedName != null) {
+                val propName = trace.poll()
+                classes.getMembers(lastQualifiedName).find { it.name == propName }?.also { memberNode ->
+                    when (memberNode) {
+                        is MethodNode -> {
+                            memberNode.type
+                        }
+
+                        is PropertyNode -> {
+                            memberNode.type
+                        }
+
+                        else -> null
+                    }?.let { it as? ClassTypeNode }?.also {
+                        if (it.arguments.isEmpty()) {
+                            lastQualifiedName = it.qualifiedName
+                        } else {
+                            (it.arguments.firstOrNull() as? ClassTypeNode)?.also {
+                                lastQualifiedName = it.qualifiedName
+                            }
+                        }
+                    }
+                }
+            }
+
+            lastQualifiedName?.also {
+                return immutableType.context.ofType(it)
+            }
+        }
+        return null
     }
 }

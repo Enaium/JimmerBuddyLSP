@@ -14,24 +14,18 @@
  * limitations under the License.
  */
 
-package cn.enaium.jimmer.buddy.project.structure.jackson
+package cn.enaium.jimmer.buddy.lang.parser.index
 
-import cn.enaium.jimmer.buddy.lang.parser.node.*
-import com.fasterxml.jackson.annotation.JsonSubTypes
-import com.fasterxml.jackson.annotation.JsonTypeInfo
+import cn.enaium.jimmer.buddy.lang.parser.node.ClassNode
+import java.nio.file.Path
 
 /**
  * @author Enaium
  */
-@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "_type_")
-@JsonSubTypes(
-    value = [
-        JsonSubTypes.Type(AnnotationClassNode::class),
-        JsonSubTypes.Type(ClassClassNode::class),
-        JsonSubTypes.Type(DataClassNode::class),
-        JsonSubTypes.Type(EnumClassNode::class),
-        JsonSubTypes.Type(InterfaceNode::class),
-    ]
-)
-class ClassNodeMixin {
+interface ClassIndex {
+    fun findClass(qualifiedName: String): ClassNode?
+
+    fun findClasses(directory: Path): List<ClassNode>
+
+    fun upsertClass(qualifiedName: String, classNode: ClassNode)
 }

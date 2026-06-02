@@ -73,7 +73,7 @@ class DocumentCompletionService(val project: Project, val documentManager: Docum
 
     fun CompletionParams.at(document: DtoDocument): List<CompletionItem> {
         var sort = 0
-        val annotationClassNodes = project.environment.classes.values.filterIsInstance<AnnotationClassNode>()
+        val annotationClassNodes = project.environment.directories.flatMap { project.environment.findClasses(it) }.filterIsInstance<AnnotationClassNode>()
         return annotationClassNodes.map { annotationClassNode ->
             CompletionItem(annotationClassNode.let {
                 if (annotationClassNode.qualifiedName.contains(".")) {
@@ -155,12 +155,12 @@ class DocumentCompletionService(val project: Project, val documentManager: Docum
         }
 
         return dtoProcessor.findProps(
-            project.environment.classes,
+            project.environment,
             document.type ?: return emptyList(),
             findCursor.findPropTrace()
         ).mapNotNull { memberNode ->
             val prop =
-                project.environment.classes[memberNode.className]?.let { document.context.ofType(it.qualifiedName) }
+                project.environment.findClass(memberNode.className)?.let { document.context.ofType(it.qualifiedName) }
                     ?.properties?.values
                     ?.find { it.name == memberNode.name } ?: return@mapNotNull null
             CompletionItem(memberNode.name).apply {

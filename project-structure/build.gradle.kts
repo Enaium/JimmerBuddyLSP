@@ -8,6 +8,8 @@ dependencies {
     implementation(libs.jackson.dataformat.smile)
     implementation(libs.jackson.module.kotlin)
     implementation(libs.coroutines)
+    implementation(libs.sqlite)
+    implementation(libs.jimmer.sql)
     testImplementation(platform("org.junit:junit-bom:5.10.0"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

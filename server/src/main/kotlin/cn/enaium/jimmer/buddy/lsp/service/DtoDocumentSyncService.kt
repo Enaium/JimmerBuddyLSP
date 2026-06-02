@@ -104,13 +104,13 @@ class DtoDocumentSyncService(project: Project, documentManager: DocumentManager)
                         val genDir = getGenDirectory(path) ?: return@schedule
                         when {
                             project.environment.isKotlinProject -> {
-                                KspGen(module.directory, project.environment.classes, genDir, emptyMap()).dtoProcess(
+                                KspGen(module.directory, project.environment, genDir, emptyMap()).dtoProcess(
                                     setOf(path)
                                 )
                             }
 
                             project.environment.isJavaProject -> {
-                                AptGen(module.directory, project.environment.classes, genDir, emptyMap()).dtoProcess(
+                                AptGen(module.directory, project.environment, genDir, emptyMap()).dtoProcess(
                                     setOf(path)
                                 )
                             }

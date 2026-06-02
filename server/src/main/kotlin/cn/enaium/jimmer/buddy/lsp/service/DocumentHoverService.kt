@@ -90,7 +90,7 @@ class DocumentHoverService(val project: Project, val documentManager: DocumentMa
                     val name = positivePropContext.prop.text
                     val trace = cursor.findPropTrace()
                     val immutableType = dtoProcessor.findType(
-                        project.environment.classes,
+                        project.environment,
                         trace,
                         document.type ?: return@also
                     ) ?: return@also
@@ -113,7 +113,7 @@ class DocumentHoverService(val project: Project, val documentManager: DocumentMa
 
                 cursor.findParent<DtoParser.MacroContext>()?.also { macroContext ->
                     val immutableType = dtoProcessor.findType(
-                        project.environment.classes,
+                        project.environment,
                         cursor.findPropTrace(),
                         document.type ?: return@also
                     ) ?: return@also

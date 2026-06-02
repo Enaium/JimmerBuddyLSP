@@ -24,6 +24,7 @@ dependencies {
     implementation(libs.jimmer.dto.compiler)
     implementation(libs.symbol.processing.api)
     implementation(libs.jspecify)
+    implementation(libs.sqlite)
 }
 
 tasks.test {

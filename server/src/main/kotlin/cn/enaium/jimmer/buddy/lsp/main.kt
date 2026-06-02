@@ -29,8 +29,10 @@ fun main(args: Array<String>) {
     args.find { it.startsWith("--port=") }?.also {
         it.split("=")[1].let { port ->
             val server = ServerSocket(port.toInt())
-            val accept = server.accept()
-            start(accept.getInputStream(), accept.getOutputStream())
+            while (true) {
+                val accept = server.accept()
+                start(accept.getInputStream(), accept.getOutputStream())
+            }
         }
     } ?: start(System.`in`, System.out)
 }

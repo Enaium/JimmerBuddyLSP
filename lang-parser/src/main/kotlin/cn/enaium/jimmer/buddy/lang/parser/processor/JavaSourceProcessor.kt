@@ -18,6 +18,7 @@ package cn.enaium.jimmer.buddy.lang.parser.processor
 
 import JavaLexer
 import JavaParser
+import cn.enaium.jimmer.buddy.lang.parser.index.ClassIndex
 import cn.enaium.jimmer.buddy.lang.parser.node.*
 import kotlinx.coroutines.*
 import org.antlr.v4.runtime.CharStreams
@@ -31,18 +32,15 @@ import kotlin.io.path.*
 /**
  * @author Enaium
  */
-class JavaSourceProcessor(val sourceDirOrJar: Set<Path>, classes: Map<String, ClassNode> = mapOf()) {
+class JavaSourceProcessor(val sourceDirOrJar: Set<Path>, private val classIndex: ClassIndex) {
 
     // Qualified name to cst
     private val sourceCompilation = ConcurrentHashMap<String, PreParse>()
 
-    // Qualified name to ClassNode
-    private val classes = ConcurrentHashMap<String, ClassNode>(classes)
-
-    suspend fun process() = coroutineScope {
+    suspend fun process(): ClassIndex = coroutineScope {
         parseSource()
         parseCst()
-        return@coroutineScope classes
+        return@coroutineScope classIndex
     }
 
     private suspend fun parseSourceJar(path: Path): Map<String, PreParse> =
@@ -163,10 +161,11 @@ class JavaSourceProcessor(val sourceDirOrJar: Set<Path>, classes: Map<String, Cl
 
                     // parse class cst
                     typeDeclaration.classDeclaration()?.also { classDeclarationContext ->
-                        // parse class cst
                         val name = classDeclarationContext.identifier().text ?: return@forEach
                         val qualifiedName = "${fqName.substringBeforeLast(".")}.${name}"
-                        classes[qualifiedName] = ClassClassNode(qualifiedName, path, annotations = annotations)
+                        classIndex.upsertClass(
+                            qualifiedName, ClassClassNode(qualifiedName, path, annotations = annotations)
+                        )
                     }
 
                     // parse interface cst
@@ -181,20 +180,25 @@ class JavaSourceProcessor(val sourceDirOrJar: Set<Path>, classes: Map<String, Cl
                             ?.mapNotNull { bodyDeclarationContext ->
                                 return@mapNotNull bodyDeclarationContext.asMethodNode(fqName, pkg, imports)
                             }?.toSet() ?: emptySet()
-                        classes[qualifiedName] =
+                        classIndex.upsertClass(
+                            qualifiedName,
                             InterfaceNode(qualifiedName, path, annotations, supers = supers, members = methods)
+                        )
                     }
 
                     // parse enum cst
                     typeDeclaration.enumDeclaration()?.also { enumDeclarationContext ->
                         val name = enumDeclarationContext.identifier().text ?: return@forEach
                         val qualifiedName = "${fqName.substringBeforeLast(".")}${name}"
-                        classes[qualifiedName] = EnumClassNode(
+                        classIndex.upsertClass(
                             qualifiedName,
-                            path,
-                            annotations,
-                            entries = enumDeclarationContext.enumConstants()?.enumConstant()
-                                ?.map { EnumEntryNode(it.identifier().text) }?.toSet() ?: emptySet()
+                            EnumClassNode(
+                                qualifiedName,
+                                path,
+                                annotations,
+                                entries = enumDeclarationContext.enumConstants()?.enumConstant()
+                                    ?.map { EnumEntryNode(it.identifier().text) }?.toSet() ?: emptySet()
+                            )
                         )
                     }
 
@@ -202,7 +206,7 @@ class JavaSourceProcessor(val sourceDirOrJar: Set<Path>, classes: Map<String, Cl
                     typeDeclaration.annotationTypeDeclaration()?.also { annotationTypeDeclarationContext ->
                         val name = annotationTypeDeclarationContext.identifier().text ?: return@forEach
                         val qualifiedName = "${fqName.substringBeforeLast(".")}.${name}"
-                        classes[qualifiedName] = AnnotationClassNode(qualifiedName, path, annotations)
+                        classIndex.upsertClass(qualifiedName, AnnotationClassNode(qualifiedName, path, annotations))
                     }
                 }
             }
@@ -352,13 +356,13 @@ class JavaSourceProcessor(val sourceDirOrJar: Set<Path>, classes: Map<String, Cl
         // The name is a qualified name if it has dot
         name.takeIf { it.contains(".") }?.also { return it }
         // The package name and the name are a qualified name if it has in cst cache.
-        "$pkg.$name".takeIf { sourceCompilation.containsKey(it) }?.also { return it }
+        "$pkg.$name".takeIf { sourceCompilation.containsKey(it) || classIndex.findClass(it) != null }?.also { return it }
         // The import is qualified name if its suffix is same the name
         imports.find { it.endsWith(name) }?.also { return it }
         // The import package name and the name are a qualified name if it has in cst cache.
         imports.filter { it.endsWith("*") }.forEach { import ->
             val qualifiedName = "${import.substringBeforeLast(".*")}.${name}"
-            if (sourceCompilation.containsKey(qualifiedName) || classes.containsKey(qualifiedName)) {
+            if (sourceCompilation.containsKey(qualifiedName) || classIndex.findClass(qualifiedName) != null) {
                 return qualifiedName
             } else {
                 sourceCompilation.forEach { (fqName, preParse) ->

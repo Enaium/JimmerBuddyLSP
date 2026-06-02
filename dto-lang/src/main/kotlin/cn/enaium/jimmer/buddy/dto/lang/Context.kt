@@ -26,7 +26,7 @@ class Context(val project: Project) {
     private val sourceCache = mutableMapOf<String, ClassNode>()
 
     fun ofSource(qualifiedName: String): ClassNode? {
-        return sourceCache[qualifiedName] ?: project.environment.classes[qualifiedName]?.also {
+        return sourceCache[qualifiedName] ?: project.environment.findClass(qualifiedName)?.also {
             sourceCache[qualifiedName] = it
         }
     }
@@ -34,7 +34,7 @@ class Context(val project: Project) {
     private val typeCache = mutableMapOf<String, ImmutableType>()
 
     fun ofType(qualifiedName: String): ImmutableType? {
-        return typeCache[qualifiedName] ?: project.environment.classes[qualifiedName]?.let {
+        return typeCache[qualifiedName] ?: project.environment.findClass(qualifiedName)?.let {
             ImmutableType(this, it).also {
                 typeCache[qualifiedName] = it
             }

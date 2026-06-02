@@ -59,12 +59,11 @@ class BuddyServer : LanguageServer {
                             val main = sourceDirectory.subpath(1, 2).name
                             val language = sourceDirectory.subpath(2, 3).name
                             val classes =
-                                project.environment.classes.values.filter { it.path.startsWith(sourceDir) }
-                                    .toSet().takeIf { it.isNotEmpty() } ?: return@forEach
+                                project.environment.findClasses(sourceDir).toSet().takeIf { it.isNotEmpty() } ?: return@forEach
                             if (project.environment.isKotlinProject) {
                                 val kspGen = KspGen(
                                     module.directory,
-                                    project.environment.classes,
+                                    project.environment,
                                     module.buildDirectory / "generated/ksp" / main / language,
                                     emptyMap()
                                 )
@@ -74,7 +73,7 @@ class BuddyServer : LanguageServer {
                             } else if (project.environment.isJavaProject) {
                                 val aptGen = AptGen(
                                     module.directory,
-                                    project.environment.classes,
+                                    project.environment,
                                     module.buildDirectory / "generated/sources/annotationProcessor" / main / language,
                                     emptyMap()
                                 )

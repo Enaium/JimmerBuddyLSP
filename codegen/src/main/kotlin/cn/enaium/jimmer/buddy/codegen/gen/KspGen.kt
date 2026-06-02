@@ -20,6 +20,7 @@ import cn.enaium.jimmer.buddy.codegen.symbol.KspProcessor
 import cn.enaium.jimmer.buddy.codegen.utility.createKspOption
 import cn.enaium.jimmer.buddy.codegen.utility.toDtoFile
 import cn.enaium.jimmer.buddy.lang.parser.node.ClassNode
+import cn.enaium.jimmer.buddy.project.structure.Environment
 import com.google.devtools.ksp.getClassDeclarationByName
 import org.babyfish.jimmer.dto.compiler.Anno
 import org.babyfish.jimmer.ksp.KspDtoCompiler
@@ -34,13 +35,13 @@ import java.nio.file.Path
  */
 class KspGen(
     projectDir: Path,
-    classes: Map<String, ClassNode>,
+    environment: Environment,
     genDir: Path,
     options: Map<String, String>
-) : Gen(projectDir, classes, genDir, options) {
+) : Gen(projectDir, environment, genDir, options) {
     fun sourceProcess(genClasses: Set<ClassNode>) {
         try {
-            val (resolver, environment, sources) = KspProcessor(classes).process(genClasses)
+            val (resolver, environment, sources) = KspProcessor(environment).process(genClasses)
 
             val option = createKspOption(emptyMap(), resolver, environment, environment.codeGenerator)
             ImmutableProcessor(
@@ -66,7 +67,7 @@ class KspGen(
     }
 
     fun dtoProcess(files: Set<Path>, name: String? = null) {
-        val (resolver, environment, sources) = KspProcessor(classes).process(emptySet())
+        val (resolver, environment, sources) = KspProcessor(environment).process(emptySet())
         val option = createKspOption(options, resolver, environment, environment.codeGenerator)
         files.forEach { file ->
             try {

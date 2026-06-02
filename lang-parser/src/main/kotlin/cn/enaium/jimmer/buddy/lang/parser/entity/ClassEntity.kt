@@ -14,24 +14,24 @@
  * limitations under the License.
  */
 
-package cn.enaium.jimmer.buddy.project.structure.jackson
+package cn.enaium.jimmer.buddy.lang.parser.entity
 
-import cn.enaium.jimmer.buddy.lang.parser.node.*
-import com.fasterxml.jackson.annotation.JsonSubTypes
-import com.fasterxml.jackson.annotation.JsonTypeInfo
+import cn.enaium.jimmer.buddy.lang.parser.node.ClassNode
+import org.babyfish.jimmer.sql.Entity
+import org.babyfish.jimmer.sql.Id
+import org.babyfish.jimmer.sql.Table
+import java.nio.file.Path
 
 /**
  * @author Enaium
  */
-@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "_type_")
-@JsonSubTypes(
-    value = [
-        JsonSubTypes.Type(AnnotationClassNode::class),
-        JsonSubTypes.Type(ClassClassNode::class),
-        JsonSubTypes.Type(DataClassNode::class),
-        JsonSubTypes.Type(EnumClassNode::class),
-        JsonSubTypes.Type(InterfaceNode::class),
-    ]
-)
-class ClassNodeMixin {
+@Entity
+@Table(name = "class_node")
+interface ClassEntity {
+    @Id
+    val qualifiedName: String
+
+    val classNode: ClassNode
+
+    val path: String
 }

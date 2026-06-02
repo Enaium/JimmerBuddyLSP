@@ -18,6 +18,7 @@ package cn.enaium.jimmer.buddy.lang.parser.processor
 
 import KotlinLexer
 import KotlinParser
+import cn.enaium.jimmer.buddy.lang.parser.index.ClassIndex
 import cn.enaium.jimmer.buddy.lang.parser.node.*
 import kotlinx.coroutines.*
 import org.antlr.v4.runtime.CharStreams
@@ -30,20 +31,17 @@ import kotlin.io.path.*
 /**
  * @author Enaium
  */
-class KotlinSourceProcessor(val sourceDirOrJar: Set<Path>, classes: Map<String, ClassNode> = mapOf()) {
+class KotlinSourceProcessor(val sourceDirOrJar: Set<Path>, private val classIndex: ClassIndex) {
 
     // Qualified name to cst
     private val sourceTopLevelObjects =
         ConcurrentHashMap<String, PreParse>()
 
-    // Qualified name to ClassNode
-    private val classes = ConcurrentHashMap(classes)
-
-    suspend fun process() = coroutineScope {
-        classes.putAll(JavaSourceProcessor(sourceDirOrJar).process())
+    suspend fun process(): ClassIndex = coroutineScope {
+        JavaSourceProcessor(sourceDirOrJar, classIndex).process()
         parseSource()
         parseCst()
-        return@coroutineScope classes
+        return@coroutineScope classIndex
     }
 
     private suspend fun parseSourceJar(path: Path): Map<String, PreParse> =
@@ -143,13 +141,13 @@ class KotlinSourceProcessor(val sourceDirOrJar: Set<Path>, classes: Map<String, 
                             ?.also {
                                 val entries = classDeclarationContext.enumClassBody()?.enumEntries()?.enumEntry()
                                     ?.mapNotNull { EnumEntryNode(it.simpleIdentifier().text) }?.toSet() ?: emptySet()
-                                classes[fqName] = EnumClassNode(fqName, path, annotations, entries)
+                                classIndex.upsertClass(fqName, EnumClassNode(fqName, path, annotations, entries))
                             } ?: run {
-                            classes[fqName] = ClassClassNode(fqName, path)
+                            classIndex.upsertClass(fqName, ClassClassNode(fqName, path))
                         }
                         classDeclarationContext.modifierList()?.modifier()
                             ?.any { it.classModifier()?.ANNOTATION() != null }?.also {
-                                classes[fqName] = AnnotationClassNode(fqName, path, annotations)
+                                classIndex.upsertClass(fqName, AnnotationClassNode(fqName, path, annotations))
                             }
                         classDeclarationContext.modifierList()?.modifier()?.any { it.classModifier()?.DATA() != null }
                             ?.also {
@@ -159,7 +157,7 @@ class KotlinSourceProcessor(val sourceDirOrJar: Set<Path>, classes: Map<String, 
                                             it.simpleIdentifier().text to (it.type().asTypeNode(pkg, imports)
                                                 ?: return@mapNotNull null)
                                         }?.toMap() ?: emptyMap()
-                                classes[fqName] = DataClassNode(fqName, path, annotations, parameters)
+                                classIndex.upsertClass(fqName, DataClassNode(fqName, path, annotations, parameters))
                             }
                     }
 
@@ -181,8 +179,10 @@ class KotlinSourceProcessor(val sourceDirOrJar: Set<Path>, classes: Map<String, 
                                 ?.toSet() ?: emptySet()
 
 
-                        classes[fqName] =
+                        classIndex.upsertClass(
+                            fqName,
                             InterfaceNode(fqName, path, annotations, supers = supers, members = properties)
+                        )
                     }
                 }
             }
@@ -324,13 +324,15 @@ class KotlinSourceProcessor(val sourceDirOrJar: Set<Path>, classes: Map<String, 
         // The name is a qualified name if it has dot
         name.takeIf { it.contains(".") }?.also { return it }
         // The package name and the name are a qualified name if it has in cst cache.
-        "$pkg.$name".takeIf { sourceTopLevelObjects.containsKey(it) || classes.containsKey(it) }?.also { return it }
+        "$pkg.$name".takeIf {
+            sourceTopLevelObjects.containsKey(it) || classIndex.findClass(it) != null
+        }?.also { return it }
         // The import is qualified name if its suffix is same the name
         imports.find { it.endsWith(name) }?.also { return it }
         // The import package name and the name are a qualified name if it has in cst cache.
         imports.filter { it.endsWith("*") }.forEach { import ->
             val qualifiedName = "${import.substringBeforeLast(".*")}.${name}"
-            if (sourceTopLevelObjects.containsKey(qualifiedName) || classes.containsKey(qualifiedName)) {
+            if (sourceTopLevelObjects.containsKey(qualifiedName) || classIndex.findClass(qualifiedName) != null) {
                 return qualifiedName
             }
         }

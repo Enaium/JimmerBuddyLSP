@@ -24,18 +24,18 @@ class KotlinDocumentSyncService(project: Project, documentManager: DocumentManag
         when (type) {
             Type.CHANGE -> {
                 deq.schedule("genSource", 2000) {
-                    val process = KotlinSourceProcessor(setOf(path), project.environment.classes).process()
-                    project.environment.classes.putAll(process)
+                    val index = project.environment.getIndex()
+                    KotlinSourceProcessor(setOf(path), index).process()
                     val module =
                         project.environment.modules.find { path.startsWith(it.directory) } ?: return@schedule
                     val genDir = getGenDirectory(path) ?: return@schedule
+                    val genClasses = index.findClasses(path.parent).filter { it.path == path }.toSet()
                     KspGen(
                         module.directory,
-                        process,
+                        project.environment,
                         genDir,
                         emptyMap()
-                    ).sourceProcess(process.values.filter { it.path == path }
-                        .toSet())
+                    ).sourceProcess(genClasses)
                 }
             }
 

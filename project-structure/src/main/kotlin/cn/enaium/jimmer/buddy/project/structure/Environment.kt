@@ -21,13 +21,13 @@ import cn.enaium.jimmer.buddy.lang.parser.node.MemberNode
 import cn.enaium.jimmer.buddy.lang.parser.node.TypeNode
 import cn.enaium.jimmer.buddy.lang.parser.processor.JavaSourceProcessor
 import cn.enaium.jimmer.buddy.lang.parser.processor.KotlinSourceProcessor
+import cn.enaium.jimmer.buddy.project.structure.index.ClassIndexImpl
 import cn.enaium.jimmer.buddy.project.structure.jackson.ClassNodeMixin
 import cn.enaium.jimmer.buddy.project.structure.jackson.MemberNodeMixin
 import cn.enaium.jimmer.buddy.project.structure.jackson.TypeNodeMixin
 import org.gradle.tooling.GradleConnector
 import org.gradle.tooling.model.idea.IdeaProject
 import org.gradle.tooling.model.idea.IdeaSingleEntryLibraryDependency
-import tools.jackson.core.type.TypeReference
 import tools.jackson.databind.node.ArrayNode
 import tools.jackson.dataformat.smile.SmileMapper
 import tools.jackson.module.kotlin.kotlinModule
@@ -43,7 +43,6 @@ import kotlin.io.path.*
 class Environment {
     val directories = mutableSetOf<Path>()
     val modules = mutableSetOf<Module>()
-    val classes = mutableMapOf<String, ClassNode>()
     val dependencies = mutableSetOf<Path>()
 
     var isJimmerProject = false
@@ -56,6 +55,16 @@ class Environment {
         .addMixIn(TypeNode::class.java, TypeNodeMixin::class.java)
         .build()
 
+    private var classIndex: ClassIndexImpl? = null
+
+    fun getIndex(): ClassIndexImpl = classIndex ?: error("ClassIndex not initialized")
+
+    fun findClass(qualifiedName: String): ClassNode? = getIndex().findClass(qualifiedName)
+
+    fun findClasses(directory: Path): List<ClassNode> = getIndex().findClasses(directory)
+
+    fun upsertClass(qualifiedName: String, classNode: ClassNode) = getIndex().upsertClass(qualifiedName, classNode)
+
     private val onExits = mutableListOf<() -> Unit>()
 
     suspend fun process(project: Project) {
@@ -67,6 +76,7 @@ class Environment {
             val modulesCache = cacheDirectory / "modules.smile"
             val classesCache = cacheDirectory / "classes.smile"
             val dependenciesCache = cacheDirectory / "dependencies.smile"
+
             val cached = listOf(cacheDirectory, modulesCache, classesCache, dependenciesCache).all { it.exists() }
             if (cached) {
                 modules.addAll(mapper.readValue<ArrayNode>(modulesCache.readBytes()).toList().map { module ->
@@ -79,7 +89,6 @@ class Environment {
                             .toList(),
                     )
                 }.toList())
-                classes.putAll(mapper.readValue<Map<String, ClassNode>>(classesCache.readBytes()))
                 dependencies.addAll(mapper.readValue<List<Path>>(dependenciesCache.readBytes()))
             } else {
                 val connection = GradleConnector.newConnector()
@@ -123,20 +132,19 @@ class Environment {
 
             val saveCache = {
                 modulesCache.writeBytes(mapper.writeValueAsBytes(modules))
-                classesCache.writeBytes(
-                    mapper.writerFor(object : TypeReference<Map<String, ClassNode>>() {}).writeValueAsBytes(classes)
-                )
                 dependenciesCache.writeBytes(mapper.writeValueAsBytes(dependencies))
             }
 
+            classIndex = ClassIndexImpl(classesCache)
             if (!cached) {
                 val jdkSrc = Path(System.getProperty("java.home")) / "lib/src.zip"
                 val sourceDirOrJar = dependencies + modules.flatMap { it.sourceDirectories } + listOf(jdkSrc)
                 if (isKotlinProject) {
-                    classes.putAll(KotlinSourceProcessor(sourceDirOrJar).process())
+                    KotlinSourceProcessor(sourceDirOrJar, classIndex!!).process()
                 } else if (isJavaProject) {
-                    classes.putAll(JavaSourceProcessor(sourceDirOrJar).process())
+                    JavaSourceProcessor(sourceDirOrJar, classIndex!!).process()
                 }
+
 
                 saveCache()
             }

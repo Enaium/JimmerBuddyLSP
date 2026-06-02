@@ -18,6 +18,7 @@ package cn.enaium.jimmer.buddy.codegen.symbol
 
 import cn.enaium.jimmer.buddy.codegen.utility.*
 import cn.enaium.jimmer.buddy.lang.parser.node.*
+import cn.enaium.jimmer.buddy.project.structure.Environment
 import net.bytebuddy.ByteBuddy
 import net.bytebuddy.description.modifier.Visibility
 import net.bytebuddy.implementation.FixedValue
@@ -51,9 +52,17 @@ import kotlin.io.path.div
  * @author Enaium
  */
 class AptProcessor(
-    val classes: Map<String, ClassNode>
+    val environment: Environment
 ) {
     val caches = mutableMapOf<String, TypeElement>()
+    private val classCache = mutableMapOf<String, ClassNode?>()
+
+    private fun findClass(qualifiedName: String?): ClassNode? {
+        if (qualifiedName == null) return null
+        return classCache.getOrPut(qualifiedName) {
+            environment.findClass(qualifiedName)
+        }
+    }
 
     fun process(genClasses: Set<ClassNode>): Apt {
         val typeElementCaches = mutableMapOf<String, TypeElement>()
@@ -165,7 +174,7 @@ class AptProcessor(
                         }
 
                         override fun getTypeElement(name: CharSequence): TypeElement {
-                            return typeElementCaches[name.toString()] ?: classes[name.toString()]?.asTypeElement()
+                            return typeElementCaches[name.toString()] ?: findClass(name.toString())?.asTypeElement()
                             ?: createTypeElement(name.toString())
                         }
 
@@ -232,7 +241,7 @@ class AptProcessor(
                 getTypeUtils = {
                     object : Types {
                         override fun asElement(t: TypeMirror): Element? {
-                            return typeElementCaches[t.toString()] ?: classes[t.toString()]?.asTypeElement()
+                            return typeElementCaches[t.toString()] ?: findClass(t.toString())?.asTypeElement()
                         }
 
                         override fun isSameType(
@@ -258,7 +267,7 @@ class AptProcessor(
                                         eq = typeElementCaches[t1Element]?.kind == ElementKind.ENUM
                                     } else {
                                         // TODO
-//                                        val classNode = classes[t2Element] ?: return false
+//                                        val classNode = findClass(t2Element) ?: return false
 //                                        eq = t1Element in ClassInheritorsSearch.search(
 //                                            classNode,
 //                                            project.allScope(),
@@ -439,7 +448,7 @@ class AptProcessor(
     }
 
     fun toImmutable(classNode: ClassNode): ImmutableType {
-        val (pe, rootElements, sources) = AptProcessor(classes).process(emptySet())
+        val (pe, rootElements, sources) = AptProcessor(environment).process(emptySet())
         val context = createContext(pe.elementUtils, pe.typeUtils, pe.filer)
         return context.getImmutableType(pe.elementUtils.getTypeElement(classNode.qualifiedName))
     }
@@ -519,7 +528,7 @@ class AptProcessor(
             getInterfaces = {
                 if (this is InterfaceNode) {
                     this.supers.filterIsInstance<ClassTypeNode>().mapNotNull {
-                        if (classes[it.qualifiedName] is InterfaceNode) {
+                        if (findClass(it.qualifiedName) is InterfaceNode) {
                             it.asTypeMirror()
                         } else {
                             null
@@ -532,7 +541,7 @@ class AptProcessor(
             getSuperclass = {
                 if (this is ClassClassNode) {
                     this.supers.filterIsInstance<ClassTypeNode>()
-                        .find { classes[it.qualifiedName] !is InterfaceNode }
+                        .find { findClass(it.qualifiedName) !is InterfaceNode }
                         ?.asTypeMirror()
                 } else {
                     null
@@ -638,7 +647,7 @@ class AptProcessor(
                         this.qualifiedName ?: throw NullPointerException("cannot find class ${this.name}")
                     },
                     asElement = {
-                        classes[this.qualifiedName]?.asTypeElement()
+                        findClass(this.qualifiedName)?.asTypeElement()
                             ?: this.qualifiedName?.let { createTypeElement(it) }
                             ?: throw IllegalStateException("cannot find class ${this.name}")
                     },
@@ -652,7 +661,7 @@ class AptProcessor(
                                     },
                                     asElement = {
                                         caches[argument.qualifiedName]
-                                            ?: classes[argument.qualifiedName]?.asTypeElement()
+                                            ?: findClass(argument.qualifiedName)?.asTypeElement()
                                             ?: this.qualifiedName?.let { createTypeElement(it) }
                                             ?: throw IllegalStateException("Generic element is null")
                                     },
@@ -831,7 +840,7 @@ class AptProcessor(
                 return createDeclaredType(
                     getQualifiedName = { this@asAnnotationMirror.annotationClass.qualifiedName!! },
                     asElement = {
-                        classes[this@asAnnotationMirror.annotationClass.qualifiedName]?.asTypeElement()
+                        findClass(this@asAnnotationMirror.annotationClass.qualifiedName)?.asTypeElement()
                             ?: createTypeElement(this@asAnnotationMirror.annotationClass.qualifiedName!!)
                     })
             }

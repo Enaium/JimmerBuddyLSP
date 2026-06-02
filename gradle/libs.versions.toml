@@ -1,6 +1,6 @@
 [versions]
 kotlin = "2.3.21"
-ksp = "2.3.7"
+ksp = "2.3.9"
 shadow = "9.4.1"
 lsp4j = "1.0.0"
 jackson = "3.1.2"
@@ -12,6 +12,7 @@ javapoet = "1.13.0"
 jspecify = "1.0.0"
 jimmer = "0.10.7"
 gradle = "9.5.0"
+sqlite = "3.53.1.0"
 
 [libraries]
 lsp4j = { module = "org.eclipse.lsp4j:org.eclipse.lsp4j", version.ref = "lsp4j" }
@@ -22,7 +23,7 @@ coroutines = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version
 byte-buddy = { module = "net.bytebuddy:byte-buddy", version.ref = "byteBuddy" }
 kotlinpoet = { module = "com.squareup:kotlinpoet", version.ref = "kotlinpoet" }
 javapoet = { module = "com.squareup:javapoet", version.ref = "javapoet" }
-jimmer-core = { module = "org.babyfish.jimmer:jimmer-core", version.ref = "jimmer" }
+jimmer-core = { module = "org.babyfish.jimmer:jimmer-core-kotlin", version.ref = "jimmer" }
 jimmer-sql = { module = "org.babyfish.jimmer:jimmer-sql-kotlin", version.ref = "jimmer" }
 jimmer-apt = { module = "org.babyfish.jimmer:jimmer-apt", version.ref = "jimmer" }
 jimmer-ksp = { module = "org.babyfish.jimmer:jimmer-ksp", version.ref = "jimmer" }
@@ -30,7 +31,9 @@ jimmer-dto-compiler = { module = "org.babyfish.jimmer:jimmer-dto-compiler", vers
 symbol-processing-api = { module = "com.google.devtools.ksp:symbol-processing-api", version.ref = "ksp" }
 jspecify = { group = "org.jspecify", name = "jspecify", version.ref = "jspecify" }
 gradle-tooling-api = { module = "org.gradle:gradle-tooling-api", version.ref = "gradle" }
+sqlite = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

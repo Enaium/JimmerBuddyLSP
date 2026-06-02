@@ -1,6 +1,6 @@
 package cn.enaium.jimmer.buddy.lsp.service
 
-import cn.enaium.jimmer.buddy.codegen.gen.KspGen
+import cn.enaium.jimmer.buddy.codegen.gen.AptGen
 import cn.enaium.jimmer.buddy.lang.parser.processor.JavaSourceProcessor
 import cn.enaium.jimmer.buddy.lsp.document.DocumentManager
 import cn.enaium.jimmer.buddy.project.structure.Project
@@ -24,18 +24,18 @@ class JavaDocumentSyncService(project: Project, documentManager: DocumentManager
         when (type) {
             Type.CHANGE -> {
                 deq.schedule("genSource", 2000) {
-                    val process = JavaSourceProcessor(setOf(path), project.environment.classes).process()
-                    project.environment.classes.putAll(process)
+                    val index = project.environment.getIndex()
+                    JavaSourceProcessor(setOf(path), index).process()
                     val module =
                         project.environment.modules.find { path.startsWith(it.directory) } ?: return@schedule
                     val genDir = getGenDirectory(path) ?: return@schedule
-                    KspGen(
+                    val genClasses = index.findClasses(path.parent).filter { it.path == path }.toSet()
+                    AptGen(
                         module.directory,
-                        process,
+                        project.environment,
                         genDir,
                         emptyMap()
-                    ).sourceProcess(process.values.filter { it.path == path }
-                        .toSet())
+                    ).sourceProcess(genClasses)
                 }
             }
 

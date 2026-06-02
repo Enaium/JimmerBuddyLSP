@@ -18,6 +18,7 @@ package cn.enaium.jimmer.buddy.codegen.symbol
 
 import cn.enaium.jimmer.buddy.codegen.utility.*
 import cn.enaium.jimmer.buddy.lang.parser.node.*
+import cn.enaium.jimmer.buddy.project.structure.Environment
 import com.google.devtools.ksp.KspExperimental
 import com.google.devtools.ksp.getClassDeclarationByName
 import com.google.devtools.ksp.processing.*
@@ -31,8 +32,16 @@ import java.io.OutputStream
 /**
  * @author Enaium
  */
-class KspProcessor(val classes: Map<String, ClassNode>) {
+class KspProcessor(val environment: Environment) {
     val caches = mutableMapOf<String, KSClassDeclaration>()
+    private val classCache = mutableMapOf<String, ClassNode?>()
+
+    private fun findClass(qualifiedName: String?): ClassNode? {
+        if (qualifiedName == null) return null
+        return classCache.getOrPut(qualifiedName) {
+            environment.findClass(qualifiedName)
+        }
+    }
 
     fun process(genClass: Set<ClassNode>): Ksp {
         val ksFiles = mutableListOf<KSFile>()
@@ -124,8 +133,8 @@ class KspProcessor(val classes: Map<String, ClassNode>) {
     }
 
     fun toImmutable(classNode: ClassNode): ImmutableType {
-        val (resolver, environment, sources) = KspProcessor(classes).process(emptySet())
-        val context = Context(resolver, environment)
+        val (resolver, kspEnvironment, sources) = KspProcessor(this.environment).process(emptySet())
+        val context = Context(resolver, kspEnvironment)
         val classDeclarationByName = resolver.getClassDeclarationByName(classNode.qualifiedName)!!
         return context.typeOf(classDeclarationByName)
     }
@@ -156,7 +165,7 @@ class KspProcessor(val classes: Map<String, ClassNode>) {
                     else -> emptySet()
                 }.mapNotNull {
                     if (it is ClassTypeNode) {
-                        val superClass = classes[it.qualifiedName()] ?: return@mapNotNull null
+                        val superClass = findClass(it.qualifiedName()) ?: return@mapNotNull null
                         createKSTypeReference(resolve = {
                             createKSType(declaration = {
                                 superClass.asKSClassDeclaration()
@@ -268,7 +277,7 @@ class KspProcessor(val classes: Map<String, ClassNode>) {
                     arguments = {
                         this.arguments.mapNotNull { argument ->
                             val qualifiedName = (argument as? ClassTypeNode)?.qualifiedName() ?: return@mapNotNull null
-                            val klass = classes[qualifiedName]
+                            val klass = findClass(qualifiedName)
                             createKSTypeArgument(
                                 type = {
                                     createKSTypeReference(
@@ -303,7 +312,7 @@ class KspProcessor(val classes: Map<String, ClassNode>) {
                         }
                     },
                     declaration = {
-                        classes[this@asKSTypeReference.qualifiedName()]?.asKSClassDeclaration()
+                        findClass(this@asKSTypeReference.qualifiedName())?.asKSClassDeclaration()
                             ?: createKSClassDeclaration(
                                 classKind = { ClassKind.CLASS },
                                 qualifiedName = { createKSName(fqName) },
@@ -335,7 +344,7 @@ class KspProcessor(val classes: Map<String, ClassNode>) {
                 resolve = {
                     createKSType(
                         declaration = {
-                            classes[fqName]?.asKSClassDeclaration()
+                            findClass(fqName)?.asKSClassDeclaration()
                                 ?: createKSClassDeclaration(
                                     classKind = { ClassKind.ANNOTATION_CLASS },
                                     qualifiedName = { createKSName(fqName) },
@@ -461,10 +470,10 @@ class KspProcessor(val classes: Map<String, ClassNode>) {
                     else -> caches[name.asString()]
                 } ?: run {
                     var cd =
-                        (classes[name.asString()])?.asKSClassDeclaration()
+                        (findClass(name.asString()))?.asKSClassDeclaration()
 
                     if (cd == null) {
-                        cd = classes[name.asString()]?.asKSClassDeclaration()
+                        cd = findClass(name.asString())?.asKSClassDeclaration()
                     }
 
                     cd

@@ -20,10 +20,14 @@ import JavaLexer
 import JavaParser
 import cn.enaium.jimmer.buddy.lang.parser.index.ClassIndex
 import cn.enaium.jimmer.buddy.lang.parser.node.*
-import kotlinx.coroutines.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
 import org.antlr.v4.runtime.CharStreams
 import org.antlr.v4.runtime.CommonTokenStream
 import java.nio.file.Path
+import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.jar.JarFile
 import java.util.zip.ZipFile
@@ -34,184 +38,178 @@ import kotlin.io.path.*
  */
 class JavaSourceProcessor(val sourceDirOrJar: Set<Path>, private val classIndex: ClassIndex) {
 
-    // Qualified name to cst
-    private val sourceCompilation = ConcurrentHashMap<String, PreParse>()
+    // All qualified names discovered during the scan phase, used for type resolution
+    private val allQualifiedNames = ConcurrentHashMap.newKeySet<String>()
+
+    // Files to fully parse in the second phase
+    private val fileEntries = Collections.synchronizedList(mutableListOf<FileEntry>())
 
     suspend fun process(): ClassIndex = coroutineScope {
-        parseSource()
-        parseCst()
+        scanSource()
+        parseFiles()
         return@coroutineScope classIndex
     }
 
-    private suspend fun parseSourceJar(path: Path): Map<String, PreParse> =
-        withContext(Dispatchers.IO) {
-            val result = mutableMapOf<String, PreParse>()
-            JarFile(path.toFile()).use { jar ->
-                val entries = jar.entries()
-                while (entries.hasMoreElements()) {
-                    val entry = entries.nextElement()
-                    if (entry.name.endsWith(".java")) {
-                        val javaLexer = JavaLexer(CharStreams.fromStream(jar.getInputStream(entry)))
-                        val javaParser = JavaParser(CommonTokenStream(javaLexer))
-                        javaLexer.removeErrorListeners()
-                        javaParser.removeErrorListeners()
-                        val compilationUnit = javaParser.compilationUnit()
-                        val pkg = compilationUnit.packageDeclaration()?.qualifiedName()?.text
-                        val name = entry.name.substringAfterLast("/").removeSuffix(".java")
-                        val qualifiedName = pkg?.let { "$it.$name" } ?: name
-                        result[qualifiedName] = PreParse(compilationUnit, path / entry.name)
-                    }
-                }
-            }
-            return@withContext result
-        }
+    // ======================== Scan Phase (regex-based, lightweight) ========================
 
-    private suspend fun parseSourceFile(path: Path): Map<String, PreParse> = withContext(Dispatchers.IO) {
-        val result = mutableMapOf<String, PreParse>()
-        val javaLexer = JavaLexer(CharStreams.fromPath(path))
-        val javaParser = JavaParser(CommonTokenStream(javaLexer))
-        javaParser.errorListeners.clear()
-        val compilationUnit = javaParser.compilationUnit()
-        val qualifiedName =
-            compilationUnit.packageDeclaration()
-                ?.qualifiedName()?.text?.let { "$it.${path.nameWithoutExtension}" } ?: return@withContext result
-        result[qualifiedName] = PreParse(compilationUnit, path)
-        return@withContext result
-    }
-
-    private suspend fun parseSourceDir(sourceDir: Path): Map<String, PreParse> =
-        withContext(Dispatchers.IO) {
-            val result = mutableMapOf<String, PreParse>()
-            sourceDir.walk().forEach { file ->
-                if (file.extension == "java") {
-                    result.putAll(parseSourceFile(file))
-                }
-            }
-            return@withContext result
-        }
-
-    private suspend fun parseJdkSource(path: Path): Map<String, PreParse> = coroutineScope {
-        val jobs = mutableListOf<Job>()
-        val result = ConcurrentHashMap<String, PreParse>()
-        ZipFile(path.toFile()).use { zip ->
-            val entries = zip.entries()
-            while (entries.hasMoreElements()) {
-                val entry = entries.nextElement()
-                if (listOf(
-                        "java.base/java/util",
-                        "java.base/java/lang",
-                        "java.base/java/time"
-                    ).any { entry.name.startsWith(it) } && entry.name.endsWith(".java")
-                ) {
-                    jobs.add(launch(Dispatchers.IO) {
-                        val javaLexer = JavaLexer(CharStreams.fromStream(zip.getInputStream(entry)))
-                        val javaParser = JavaParser(CommonTokenStream(javaLexer))
-                        javaParser.errorListeners.clear()
-                        val compilationUnit = javaParser.compilationUnit()
-                        val qualifiedName = compilationUnit.packageDeclaration()?.qualifiedName()?.text
-                            ?.let { "$it.${entry.name.substringAfterLast("/").removeSuffix(".java")}" }
-                            ?: return@launch
-                        result[qualifiedName] = PreParse(compilationUnit, path / entry.name)
-                    })
-                }
-            }
-            jobs.joinAll()
-        }
-        return@coroutineScope result
-    }
-
-    private suspend fun parseSource() = coroutineScope {
-        // parse cst
+    private suspend fun scanSource() = coroutineScope {
         sourceDirOrJar.mapNotNull { entry ->
             if (!entry.exists()) {
                 return@mapNotNull null
             }
             launch(Dispatchers.IO) {
-                if (entry.isDirectory()) {
-                    sourceCompilation.putAll(parseSourceDir(entry))
-                } else if (entry.extension == "jar") {
-                    sourceCompilation.putAll(parseSourceJar(entry))
-                } else if (entry.extension == "zip") {
-                    sourceCompilation.putAll(parseJdkSource(entry))
-                } else if (entry.extension == "java") {
-                    sourceCompilation.putAll(parseSourceFile(entry))
+                when {
+                    entry.isDirectory() -> scanDir(entry)
+                    entry.extension == "jar" -> scanJar(entry)
+                    entry.extension == "zip" -> scanJdkZip(entry)
+                    entry.extension == "java" -> scanFile(entry)
                 }
             }
         }.joinAll()
     }
 
-    private suspend fun parseCst() = coroutineScope {
-        // parse node from cst
-        sourceCompilation.map { (fqName, preParse) ->
+    private fun scanDir(sourceDir: Path) {
+        sourceDir.walk().forEach { file ->
+            if (file.extension == "java") {
+                scanFile(file)
+            }
+        }
+    }
+
+    private fun scanJar(path: Path) {
+        JarFile(path.toFile()).use { jar ->
+            val entries = jar.entries()
+            while (entries.hasMoreElements()) {
+                val entry = entries.nextElement()
+                if (!entry.name.endsWith(".java")) continue
+                val entryName = entry.name
+                val content = jar.getInputStream(entry).readAllBytes().decodeToString()
+                addFile(content, path / entryName) {
+                    JarFile(path.toFile()).use { j ->
+                        j.getInputStream(j.getEntry(entryName)).readAllBytes().decodeToString()
+                    }
+                }
+            }
+        }
+    }
+
+    private fun scanJdkZip(path: Path) {
+        val relevantPrefixes = listOf("java.base/java/util", "java.base/java/lang", "java.base/java/time")
+        ZipFile(path.toFile()).use { zip ->
+            val entries = zip.entries()
+            while (entries.hasMoreElements()) {
+                val entry = entries.nextElement()
+                if (relevantPrefixes.none { entry.name.startsWith(it) } || !entry.name.endsWith(".java")) continue
+                val entryName = entry.name
+                val content = zip.getInputStream(entry).readAllBytes().decodeToString()
+                addFile(content, path / entryName) {
+                    ZipFile(path.toFile()).use { z ->
+                        z.getInputStream(z.getEntry(entryName)).readAllBytes().decodeToString()
+                    }
+                }
+            }
+        }
+    }
+
+    private fun scanFile(filePath: Path) {
+        val content = filePath.readText()
+        addFile(content, filePath) { filePath.readText() }
+    }
+
+    private fun addFile(content: String, path: Path, contentProvider: () -> String) {
+        val qualifiedNames = extractQualifiedNames(content)
+        if (qualifiedNames.isEmpty()) return
+        allQualifiedNames.addAll(qualifiedNames)
+        fileEntries.add(FileEntry(path, contentProvider))
+    }
+
+    /**
+     * Extract qualified names from Java source content using regex (no ANTLR).
+     */
+    private fun extractQualifiedNames(content: String): List<String> {
+        val clean = stripComments(content)
+        val pkg = PACKAGE_REGEX.find(clean)?.groupValues?.get(1) ?: return emptyList()
+        val typeNames = TYPE_REGEX.findAll(clean).map { it.groupValues[1] }.toList()
+        return typeNames.map { "$pkg.$it" }
+    }
+
+    // ======================== Parse Phase (full ANTLR4, immediate indexing) ========================
+
+    private suspend fun parseFiles() = coroutineScope {
+        fileEntries.map { entry ->
             launch(Dispatchers.Default) {
-                val (compilationUnit, path) = preParse
-                val pkg = compilationUnit.packageDeclaration()?.qualifiedName()?.text ?: ""
-                val imports =
-                    compilationUnit.importDeclaration().map { importDeclaration ->
-                        importDeclaration.qualifiedName().text.let { qualifiedName ->
-                            importDeclaration?.MUL()?.let { "$qualifiedName.$it" } ?: qualifiedName
-                        }
-                    }.toSet()
-
-                // All type declaration such as class, interface, enum etc.
-                compilationUnit.typeDeclaration().forEach { typeDeclaration ->
-
-                    val annotations = typeDeclaration.classOrInterfaceModifier()
-                        ?.mapNotNull { it.annotation()?.asAnnotationEntryNode(pkg, imports) }?.toSet() ?: emptySet()
-
-                    // parse class cst
-                    typeDeclaration.classDeclaration()?.also { classDeclarationContext ->
-                        val name = classDeclarationContext.identifier().text ?: return@forEach
-                        val qualifiedName = "${fqName.substringBeforeLast(".")}.${name}"
-                        classIndex.upsertClass(
-                            qualifiedName, ClassClassNode(qualifiedName, path, annotations = annotations)
-                        )
-                    }
-
-                    // parse interface cst
-                    typeDeclaration.interfaceDeclaration()?.also { interfaceDeclarationContext ->
-                        val name = interfaceDeclarationContext.identifier().text ?: return@forEach
-                        val qualifiedName = "${fqName.substringBeforeLast(".")}.${name}"
-                        val supers = interfaceDeclarationContext.typeList()
-                            ?.flatMap { it.typeType().map { it.asTypeNode(pkg, imports) } }
-                            ?.toSet() ?: emptySet()
-
-                        val methods = interfaceDeclarationContext.interfaceBody()?.interfaceBodyDeclaration()
-                            ?.mapNotNull { bodyDeclarationContext ->
-                                return@mapNotNull bodyDeclarationContext.asMethodNode(fqName, pkg, imports)
-                            }?.toSet() ?: emptySet()
-                        classIndex.upsertClass(
-                            qualifiedName,
-                            InterfaceNode(qualifiedName, path, annotations, supers = supers, members = methods)
-                        )
-                    }
-
-                    // parse enum cst
-                    typeDeclaration.enumDeclaration()?.also { enumDeclarationContext ->
-                        val name = enumDeclarationContext.identifier().text ?: return@forEach
-                        val qualifiedName = "${fqName.substringBeforeLast(".")}${name}"
-                        classIndex.upsertClass(
-                            qualifiedName,
-                            EnumClassNode(
-                                qualifiedName,
-                                path,
-                                annotations,
-                                entries = enumDeclarationContext.enumConstants()?.enumConstant()
-                                    ?.map { EnumEntryNode(it.identifier().text) }?.toSet() ?: emptySet()
-                            )
-                        )
-                    }
-
-                    // parse annotation cst
-                    typeDeclaration.annotationTypeDeclaration()?.also { annotationTypeDeclarationContext ->
-                        val name = annotationTypeDeclarationContext.identifier().text ?: return@forEach
-                        val qualifiedName = "${fqName.substringBeforeLast(".")}.${name}"
-                        classIndex.upsertClass(qualifiedName, AnnotationClassNode(qualifiedName, path, annotations))
-                    }
-                }
+                parseAndIndex(entry.contentProvider(), entry.path)
             }
         }.joinAll()
     }
+
+    private fun parseAndIndex(content: String, path: Path) {
+        val javaLexer = JavaLexer(CharStreams.fromString(content))
+        val javaParser = JavaParser(CommonTokenStream(javaLexer))
+        javaParser.errorListeners.clear()
+        val compilationUnit = javaParser.compilationUnit()
+
+        val pkg = compilationUnit.packageDeclaration()?.qualifiedName()?.text ?: ""
+        val imports = compilationUnit.importDeclaration().map { importDeclaration ->
+            importDeclaration.qualifiedName().text.let { qualifiedName ->
+                importDeclaration.MUL()?.let { "$qualifiedName.*" } ?: qualifiedName
+            }
+        }.toSet()
+
+        val typeDeclarations = compilationUnit.typeDeclaration()
+        compilationUnit.children?.clear()
+
+        typeDeclarations.forEach { typeDeclaration ->
+            val annotations = typeDeclaration.classOrInterfaceModifier()
+                ?.mapNotNull { it.annotation()?.asAnnotationEntryNode(pkg, imports) }?.toSet() ?: emptySet()
+
+            typeDeclaration.classDeclaration()?.also { classDeclarationContext ->
+                val name = classDeclarationContext.identifier().text ?: return@forEach
+                classIndex.upsertClass(
+                    "$pkg.$name", ClassClassNode("$pkg.$name", path, annotations = annotations)
+                )
+            }
+
+            typeDeclaration.interfaceDeclaration()?.also { interfaceDeclarationContext ->
+                val name = interfaceDeclarationContext.identifier().text ?: return@forEach
+                val supers = interfaceDeclarationContext.typeList()
+                    ?.flatMap { it.typeType().map { it.asTypeNode(pkg, imports) } }
+                    ?.toSet() ?: emptySet()
+
+                val methods = interfaceDeclarationContext.interfaceBody()?.interfaceBodyDeclaration()
+                    ?.mapNotNull { bodyDeclarationContext ->
+                        return@mapNotNull bodyDeclarationContext.asMethodNode("$pkg.$name", pkg, imports)
+                    }?.toSet() ?: emptySet()
+                classIndex.upsertClass(
+                    "$pkg.$name",
+                    InterfaceNode("$pkg.$name", path, annotations, supers = supers, members = methods)
+                )
+            }
+
+            typeDeclaration.enumDeclaration()?.also { enumDeclarationContext ->
+                val name = enumDeclarationContext.identifier().text ?: return@forEach
+                classIndex.upsertClass(
+                    "$pkg.$name",
+                    EnumClassNode(
+                        "$pkg.$name",
+                        path,
+                        annotations,
+                        entries = enumDeclarationContext.enumConstants()?.enumConstant()
+                            ?.map { EnumEntryNode(it.identifier().text) }?.toSet() ?: emptySet()
+                    )
+                )
+            }
+
+            typeDeclaration.annotationTypeDeclaration()?.also { annotationTypeDeclarationContext ->
+                val name = annotationTypeDeclarationContext.identifier().text ?: return@forEach
+                classIndex.upsertClass("$pkg.$name", AnnotationClassNode("$pkg.$name", path, annotations))
+            }
+
+            typeDeclaration.children?.clear()
+        }
+    }
+
+    // ======================== Helper methods (unchanged semantics) ========================
 
     private fun JavaParser.InterfaceBodyDeclarationContext.asMethodNode(
         className: String,
@@ -355,37 +353,39 @@ class JavaSourceProcessor(val sourceDirOrJar: Set<Path>, private val classIndex:
     private fun findQualifiedName(pkg: String, imports: Set<String>, name: String): String? {
         // The name is a qualified name if it has dot
         name.takeIf { it.contains(".") }?.also { return it }
-        // The package name and the name are a qualified name if it has in cst cache.
-        "$pkg.$name".takeIf { sourceCompilation.containsKey(it) || classIndex.findClass(it) != null }?.also { return it }
+        // The package name and the name are a qualified name if it is known.
+        "$pkg.$name".takeIf { it in allQualifiedNames || classIndex.findClass(it) != null }?.also { return it }
         // The import is qualified name if its suffix is same the name
         imports.find { it.endsWith(name) }?.also { return it }
-        // The import package name and the name are a qualified name if it has in cst cache.
+        // Wildcard imports: expand each and check against known qualified names
         imports.filter { it.endsWith("*") }.forEach { import ->
             val qualifiedName = "${import.substringBeforeLast(".*")}.${name}"
-            if (sourceCompilation.containsKey(qualifiedName) || classIndex.findClass(qualifiedName) != null) {
+            if (qualifiedName in allQualifiedNames || classIndex.findClass(qualifiedName) != null) {
                 return qualifiedName
-            } else {
-                sourceCompilation.forEach { (fqName, preParse) ->
-                    val (compilationUnit, path) = preParse
-                    compilationUnit.typeDeclaration().forEach { declarationContext ->
-                        (declarationContext.classDeclaration()?.identifier()
-                            ?: declarationContext.interfaceDeclaration()?.identifier()
-                            ?: declarationContext.enumDeclaration()?.identifier()
-                            ?: declarationContext.annotationTypeDeclaration()?.identifier())
-                            ?.let {
-                                "${fqName.substringBeforeLast(".")}.${name}"
-                            }?.also {
-                                return it
-                            }
-                    }
-                }
             }
         }
         return null
     }
 
-    private data class PreParse(
-        val cst: JavaParser.CompilationUnitContext,
-        val path: Path
+    private class FileEntry(
+        val path: Path,
+        val contentProvider: () -> String
     )
+
+    companion object {
+        private val PACKAGE_REGEX =
+            Regex("""^\s*package\s+([a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)*)\s*;""", RegexOption.MULTILINE)
+        private val TYPE_REGEX = Regex(
+            """^\s*(?:public\s+)?(?:abstract\s+|final\s+)?(?:class|interface|enum|@interface)\s+([a-zA-Z_]\w*)""",
+            RegexOption.MULTILINE
+        )
+
+        private fun stripComments(content: String): String {
+            val noBlock = content.replace(BLOCK_COMMENT_REGEX, " ")
+            return noBlock.replace(LINE_COMMENT_REGEX, " ")
+        }
+
+        private val BLOCK_COMMENT_REGEX = Regex("/\\*[\\s\\S]*?\\*/")
+        private val LINE_COMMENT_REGEX = Regex("//[^\n]*")
+    }
 }

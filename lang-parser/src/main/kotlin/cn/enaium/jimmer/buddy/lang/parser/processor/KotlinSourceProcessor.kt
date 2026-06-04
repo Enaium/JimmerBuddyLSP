@@ -20,10 +20,14 @@ import KotlinLexer
 import KotlinParser
 import cn.enaium.jimmer.buddy.lang.parser.index.ClassIndex
 import cn.enaium.jimmer.buddy.lang.parser.node.*
-import kotlinx.coroutines.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
 import org.antlr.v4.runtime.CharStreams
 import org.antlr.v4.runtime.CommonTokenStream
 import java.nio.file.Path
+import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.jar.JarFile
 import kotlin.io.path.*
@@ -33,161 +37,183 @@ import kotlin.io.path.*
  */
 class KotlinSourceProcessor(val sourceDirOrJar: Set<Path>, private val classIndex: ClassIndex) {
 
-    // Qualified name to cst
-    private val sourceTopLevelObjects =
-        ConcurrentHashMap<String, PreParse>()
+    // All qualified names discovered during the scan phase, used for type resolution
+    private val allQualifiedNames = ConcurrentHashMap.newKeySet<String>()
+
+    // Files to fully parse in the second phase
+    private val fileEntries = Collections.synchronizedList(mutableListOf<FileEntry>())
 
     suspend fun process(): ClassIndex = coroutineScope {
         JavaSourceProcessor(sourceDirOrJar, classIndex).process()
-        parseSource()
-        parseCst()
+        scanSource()
+        parseFiles()
         return@coroutineScope classIndex
     }
 
-    private suspend fun parseSourceJar(path: Path): Map<String, PreParse> =
-        withContext(Dispatchers.IO) {
-            val result = mutableMapOf<String, PreParse>()
-            JarFile(path.toFile()).use { jar ->
-                val entries = jar.entries()
-                while (entries.hasMoreElements()) {
-                    val entry = entries.nextElement()
-                    if (entry.name.endsWith(".kt")) {
-                        val kotlinLexer = KotlinLexer(CharStreams.fromStream(jar.getInputStream(entry)))
-                        val kotlinParser = KotlinParser(CommonTokenStream(kotlinLexer))
-                        kotlinLexer.removeErrorListeners()
-                        kotlinParser.removeErrorListeners()
-                        val kotlinFile = kotlinParser.kotlinFile()
+    // ======================== Scan Phase (regex-based, lightweight) ========================
 
-                        val pkg = kotlinFile.preamble()?.packageHeader()?.identifier()?.text
-                        kotlinFile.topLevelObject().forEach { topLevelObject ->
-                            val name = topLevelObject.classDeclaration()?.simpleIdentifier()?.text
-                            val qualifiedName = pkg?.let { pkg -> "$pkg.$name" } ?: name ?: return@forEach
-                            result[qualifiedName] = PreParse(kotlinFile.preamble(), topLevelObject, path / entry.name)
-                        }
-                    }
-                }
-            }
-            return@withContext result
-        }
-
-    private suspend fun parseSourceFile(path: Path): Map<String, PreParse> = withContext(Dispatchers.IO) {
-        val result = mutableMapOf<String, PreParse>()
-        val kotlinLexer = KotlinLexer(CharStreams.fromPath(path))
-        val kotlinParser = KotlinParser(CommonTokenStream(kotlinLexer))
-        kotlinLexer.removeErrorListeners()
-        kotlinParser.removeErrorListeners()
-        val kotlinFile = kotlinParser.kotlinFile()
-
-        val pkg = kotlinFile.preamble()?.packageHeader()?.identifier()?.text
-        kotlinFile.topLevelObject().forEach { topLevelObject ->
-            val name = topLevelObject.classDeclaration()?.simpleIdentifier()?.text
-            val qualifiedName = pkg?.let { pkg -> "$pkg.$name" } ?: name ?: return@forEach
-            result[qualifiedName] = PreParse(kotlinFile.preamble(), topLevelObject, path)
-        }
-        return@withContext result
-    }
-
-    private suspend fun parseSourceDir(sourceDir: Path): Map<String, PreParse> =
-        withContext(Dispatchers.IO) {
-            val result = mutableMapOf<String, PreParse>()
-            sourceDir.walk().forEach { file ->
-                if (file.extension == "kt") {
-                    result.putAll(parseSourceFile(file))
-                }
-            }
-            return@withContext result
-        }
-
-    private suspend fun parseSource() = coroutineScope {
-        // parse cst
+    private suspend fun scanSource() = coroutineScope {
         sourceDirOrJar.mapNotNull { entry ->
             if (!entry.exists()) {
                 return@mapNotNull null
             }
             launch(Dispatchers.IO) {
-                if (entry.isDirectory()) {
-                    sourceTopLevelObjects.putAll(parseSourceDir(entry))
-                } else if (entry.extension == "jar") {
-                    sourceTopLevelObjects.putAll(parseSourceJar(entry))
-                } else if (entry.extension == "kt") {
-                    sourceTopLevelObjects.putAll(parseSourceFile(entry))
+                when {
+                    entry.isDirectory() -> scanDir(entry)
+                    entry.extension == "jar" -> scanJar(entry)
+                    entry.extension == "kt" -> scanFile(entry)
                 }
             }
         }.joinAll()
     }
 
-    private suspend fun parseCst() = coroutineScope {
-        // parse node from cst
-        sourceTopLevelObjects.map { (fqName, preParse) ->
-            val (preamble, topLevelObject, path) = preParse
+    private fun scanDir(sourceDir: Path) {
+        sourceDir.walk().forEach { file ->
+            if (file.extension == "kt") {
+                scanFile(file)
+            }
+        }
+    }
+
+    private fun scanJar(path: Path) {
+        JarFile(path.toFile()).use { jar ->
+            val entries = jar.entries()
+            while (entries.hasMoreElements()) {
+                val entry = entries.nextElement()
+                if (!entry.name.endsWith(".kt")) continue
+                val entryName = entry.name
+                val content = jar.getInputStream(entry).readAllBytes().decodeToString()
+                addFile(content, path / entryName) {
+                    JarFile(path.toFile()).use { j ->
+                        j.getInputStream(j.getEntry(entryName)).readAllBytes().decodeToString()
+                    }
+                }
+            }
+        }
+    }
+
+    private fun scanFile(filePath: Path) {
+        val content = filePath.readText()
+        addFile(content, filePath) { filePath.readText() }
+    }
+
+    private fun addFile(content: String, path: Path, contentProvider: () -> String) {
+        val qualifiedNames = extractQualifiedNames(content)
+        if (qualifiedNames.isEmpty()) return
+        allQualifiedNames.addAll(qualifiedNames)
+        fileEntries.add(FileEntry(path, contentProvider))
+    }
+
+    /**
+     * Extract qualified names from Kotlin source content using regex (no ANTLR).
+     */
+    private fun extractQualifiedNames(content: String): List<String> {
+        val clean = stripComments(content)
+        val pkg = KOTLIN_PACKAGE_REGEX.find(clean)?.groupValues?.get(1)
+        val typeNames = KOTLIN_TYPE_REGEX.findAll(clean).map { it.groupValues[1] }.toList()
+        return typeNames.map { name ->
+            if (pkg != null) "$pkg.$name" else name
+        }
+    }
+
+    // ======================== Parse Phase (full ANTLR4, immediate indexing) ========================
+
+    private suspend fun parseFiles() = coroutineScope {
+        fileEntries.map { entry ->
             launch(Dispatchers.Default) {
-                val pkg = preamble.packageHeader()?.identifier()?.text ?: return@launch
-                val imports = preamble.importList()?.importHeader()?.map { importHeader ->
-                    importHeader.identifier().text.let { identifier ->
-                        importHeader.MULT()?.let { "$identifier.$it" } ?: identifier
-                    }
-                }?.toSet() ?: emptySet()
-
-                topLevelObject.classDeclaration()?.also { classDeclarationContext ->
-                    val annotations =
-                        classDeclarationContext.modifierList()?.annotations()
-                            ?.map { it.annotation().asAnnotationEntryNode(pkg, imports) }?.toSet()
-                            ?: emptySet()
-
-                    // parse class cst
-                    classDeclarationContext.CLASS()?.also {
-                        // parse enum cst
-                        classDeclarationContext.modifierList()?.modifier()?.any { it.classModifier()?.ENUM() != null }
-                            ?.also {
-                                val entries = classDeclarationContext.enumClassBody()?.enumEntries()?.enumEntry()
-                                    ?.mapNotNull { EnumEntryNode(it.simpleIdentifier().text) }?.toSet() ?: emptySet()
-                                classIndex.upsertClass(fqName, EnumClassNode(fqName, path, annotations, entries))
-                            } ?: run {
-                            classIndex.upsertClass(fqName, ClassClassNode(fqName, path))
-                        }
-                        classDeclarationContext.modifierList()?.modifier()
-                            ?.any { it.classModifier()?.ANNOTATION() != null }?.also {
-                                classIndex.upsertClass(fqName, AnnotationClassNode(fqName, path, annotations))
-                            }
-                        classDeclarationContext.modifierList()?.modifier()?.any { it.classModifier()?.DATA() != null }
-                            ?.also {
-                                val parameters =
-                                    classDeclarationContext.primaryConstructor()?.classParameters()?.classParameter()
-                                        ?.mapNotNull {
-                                            it.simpleIdentifier().text to (it.type().asTypeNode(pkg, imports)
-                                                ?: return@mapNotNull null)
-                                        }?.toMap() ?: emptyMap()
-                                classIndex.upsertClass(fqName, DataClassNode(fqName, path, annotations, parameters))
-                            }
-                    }
-
-                    // parse interface cst
-                    classDeclarationContext.INTERFACE()?.also {
-
-                        val supers = classDeclarationContext.delegationSpecifiers()?.delegationSpecifier()?.mapNotNull {
-                            it.asTypeNode(pkg, imports)
-                        }?.toSet() ?: emptySet()
-
-                        val properties = classDeclarationContext.classBody()?.classMemberDeclaration()
-                            ?.mapNotNull { it.propertyDeclaration()?.asPropertyNode(fqName, pkg, imports) }?.toSet()
-                            ?: classDeclarationContext.delegationSpecifiers()?.delegationSpecifier()?.lastOrNull()
-                                ?.constructorInvocation()?.callSuffix()?.annotatedLambda()?.firstOrNull()
-                                ?.functionLiteral()?.statements()?.statement()
-                                ?.mapNotNull {
-                                    it.declaration()?.propertyDeclaration()?.asPropertyNode(fqName, pkg, imports)
-                                }
-                                ?.toSet() ?: emptySet()
-
-
-                        classIndex.upsertClass(
-                            fqName,
-                            InterfaceNode(fqName, path, annotations, supers = supers, members = properties)
-                        )
-                    }
-                }
+                parseAndIndex(entry.contentProvider(), entry.path)
             }
         }.joinAll()
     }
+
+    private fun parseAndIndex(content: String, path: Path) {
+        val kotlinLexer = KotlinLexer(CharStreams.fromString(content))
+        val kotlinParser = KotlinParser(CommonTokenStream(kotlinLexer))
+        kotlinLexer.removeErrorListeners()
+        kotlinParser.removeErrorListeners()
+        val kotlinFile = kotlinParser.kotlinFile()
+
+        val pkg = kotlinFile.preamble()?.packageHeader()?.identifier()?.text ?: return
+        val imports = kotlinFile.preamble()?.importList()?.importHeader()?.map { importHeader ->
+            importHeader.identifier().text.let { identifier ->
+                importHeader.MULT()?.let { "$identifier.*" } ?: identifier
+            }
+        }?.toSet() ?: emptySet()
+
+        val topLevelObjects = kotlinFile.topLevelObject()
+        kotlinFile.children?.clear()
+
+        topLevelObjects.forEach { topLevelObject ->
+            topLevelObject.classDeclaration()?.also { classDeclarationContext ->
+                val name = classDeclarationContext.simpleIdentifier()?.text ?: return@forEach
+                val annotations =
+                    classDeclarationContext.modifierList()?.annotations()
+                        ?.map { it.annotation().asAnnotationEntryNode(pkg, imports) }?.toSet()
+                        ?: emptySet()
+
+                // class
+                classDeclarationContext.CLASS()?.also {
+                    // enum
+                    classDeclarationContext.modifierList()?.modifier()
+                        ?.any { it.classModifier()?.ENUM() != null }
+                        ?.also {
+                            val entries = classDeclarationContext.enumClassBody()?.enumEntries()?.enumEntry()
+                                ?.mapNotNull { EnumEntryNode(it.simpleIdentifier().text) }?.toSet() ?: emptySet()
+                            classIndex.upsertClass(
+                                "$pkg.$name",
+                                EnumClassNode("$pkg.$name", path, annotations, entries)
+                            )
+                        } ?: run {
+                        classIndex.upsertClass("$pkg.$name", ClassClassNode("$pkg.$name", path))
+                    }
+                    classDeclarationContext.modifierList()?.modifier()
+                        ?.any { it.classModifier()?.ANNOTATION() != null }?.also {
+                            classIndex.upsertClass("$pkg.$name", AnnotationClassNode("$pkg.$name", path, annotations))
+                        }
+                    classDeclarationContext.modifierList()?.modifier()
+                        ?.any { it.classModifier()?.DATA() != null }
+                        ?.also {
+                            val parameters =
+                                classDeclarationContext.primaryConstructor()?.classParameters()?.classParameter()
+                                    ?.mapNotNull {
+                                        it.simpleIdentifier().text to (it.type().asTypeNode(pkg, imports)
+                                            ?: return@mapNotNull null)
+                                    }?.toMap() ?: emptyMap()
+                            classIndex.upsertClass(
+                                "$pkg.$name",
+                                DataClassNode("$pkg.$name", path, annotations, parameters)
+                            )
+                        }
+                }
+
+                // interface
+                classDeclarationContext.INTERFACE()?.also {
+                    val supers = classDeclarationContext.delegationSpecifiers()?.delegationSpecifier()?.mapNotNull {
+                        it.asTypeNode(pkg, imports)
+                    }?.toSet() ?: emptySet()
+
+                    val properties = classDeclarationContext.classBody()?.classMemberDeclaration()
+                        ?.mapNotNull { it.propertyDeclaration()?.asPropertyNode("$pkg.$name", pkg, imports) }?.toSet()
+                        ?: classDeclarationContext.delegationSpecifiers()?.delegationSpecifier()?.lastOrNull()
+                            ?.constructorInvocation()?.callSuffix()?.annotatedLambda()?.firstOrNull()
+                            ?.functionLiteral()?.statements()?.statement()
+                            ?.mapNotNull {
+                                it.declaration()?.propertyDeclaration()?.asPropertyNode("$pkg.$name", pkg, imports)
+                            }
+                            ?.toSet() ?: emptySet()
+
+                    classIndex.upsertClass(
+                        "$pkg.$name",
+                        InterfaceNode("$pkg.$name", path, annotations, supers = supers, members = properties)
+                    )
+                }
+            }
+
+            topLevelObject.children?.clear()
+        }
+    }
+
+    // ======================== Helper methods ========================
 
     private fun KotlinParser.PropertyDeclarationContext.asPropertyNode(
         className: String,
@@ -270,7 +296,6 @@ class KotlinSourceProcessor(val sourceDirOrJar: Set<Path>, private val classInde
             }
         }
 
-
         if (postfixUnaryExpression?.let {
                 it.atomicExpression() != null && it.postfixUnaryOperation().isNotEmpty()
             } == true) {
@@ -282,11 +307,7 @@ class KotlinSourceProcessor(val sourceDirOrJar: Set<Path>, private val classInde
     private fun KotlinParser.DelegationSpecifierContext.asTypeNode(pkg: String, imports: Set<String>): TypeNode? {
         val name = (this.userType() ?: this.constructorInvocation()?.userType())?.simpleUserType()
             ?.map { it.simpleIdentifier() }?.joinToString(".") { it.text } ?: return null
-        val qualifiedName = findQualifiedName(
-            pkg,
-            imports,
-            name
-        )
+        val qualifiedName = findQualifiedName(pkg, imports, name)
         return ClassTypeNode(name, qualifiedName)
     }
 
@@ -295,22 +316,19 @@ class KotlinSourceProcessor(val sourceDirOrJar: Set<Path>, private val classInde
         imports: Set<String>,
         name: String = ""
     ): TypeNode? {
-        val name = this.atomicExpression()?.simpleIdentifier()?.text?.let { identifier ->
+        val n = this.atomicExpression()?.simpleIdentifier()?.text?.let { identifier ->
             name.takeIf { it.isNotBlank() }?.let { "$it.$identifier" } ?: identifier
         } ?: return null
 
         this.postfixUnaryOperation()?.firstOrNull()?.postfixUnaryExpression()?.also { postfixUnaryExpression ->
-            return postfixUnaryExpression.asTypeNode(pkg, imports, name)
+            return postfixUnaryExpression.asTypeNode(pkg, imports, n)
         }
 
         this.callableReference()?.userType()?.simpleUserType()?.firstOrNull()
             ?.simpleIdentifier()?.text?.also { identifier ->
                 val qualifiedName =
-                    findQualifiedName(
-                        pkg,
-                        imports,
-                        name.takeIf { it.isNotBlank() }?.let { "$it.$identifier" } ?: identifier)
-                return ClassTypeNode(name, qualifiedName)
+                    findQualifiedName(pkg, imports, n)
+                return ClassTypeNode(n, qualifiedName)
             }
 
         return null
@@ -323,25 +341,43 @@ class KotlinSourceProcessor(val sourceDirOrJar: Set<Path>, private val classInde
     private fun findQualifiedName(pkg: String, imports: Set<String>, name: String): String? {
         // The name is a qualified name if it has dot
         name.takeIf { it.contains(".") }?.also { return it }
-        // The package name and the name are a qualified name if it has in cst cache.
+        // The package name and the name are a qualified name if it is known.
         "$pkg.$name".takeIf {
-            sourceTopLevelObjects.containsKey(it) || classIndex.findClass(it) != null
+            it in allQualifiedNames || classIndex.findClass(it) != null
         }?.also { return it }
         // The import is qualified name if its suffix is same the name
         imports.find { it.endsWith(name) }?.also { return it }
-        // The import package name and the name are a qualified name if it has in cst cache.
+        // Wildcard imports: expand each and check against known qualified names
         imports.filter { it.endsWith("*") }.forEach { import ->
             val qualifiedName = "${import.substringBeforeLast(".*")}.${name}"
-            if (sourceTopLevelObjects.containsKey(qualifiedName) || classIndex.findClass(qualifiedName) != null) {
+            if (qualifiedName in allQualifiedNames || classIndex.findClass(qualifiedName) != null) {
                 return qualifiedName
             }
         }
         return null
     }
 
-    private data class PreParse(
-        val preamble: KotlinParser.PreambleContext,
-        val topLevelObject: KotlinParser.TopLevelObjectContext,
-        val path: Path
+    private class FileEntry(
+        val path: Path,
+        val contentProvider: () -> String
     )
+
+    companion object {
+        private val KOTLIN_PACKAGE_REGEX = Regex(
+            """^\s*package\s+([a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)*)""",
+            RegexOption.MULTILINE
+        )
+        private val KOTLIN_TYPE_REGEX = Regex(
+            """^\s*(?:(?:public|private|internal|protected|abstract|open|data|sealed|inner|actual|expect|enum|annotation)\s+)*(?:class|interface|object)\s+([A-Za-z_]\w*)""",
+            RegexOption.MULTILINE
+        )
+
+        private fun stripComments(content: String): String {
+            val noBlock = content.replace(BLOCK_COMMENT_REGEX, " ")
+            return noBlock.replace(LINE_COMMENT_REGEX, " ")
+        }
+
+        private val BLOCK_COMMENT_REGEX = Regex("/\\*[\\s\\S]*?\\*/")
+        private val LINE_COMMENT_REGEX = Regex("//[^\n]*")
+    }
 }

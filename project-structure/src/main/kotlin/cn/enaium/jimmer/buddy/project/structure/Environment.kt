@@ -16,7 +16,7 @@
 
 package cn.enaium.jimmer.buddy.project.structure
 
-import cn.enaium.jimmer.buddy.lang.parser.node.ClassNode
+import cn.enaium.jimmer.buddy.lang.parser.node.BaseClassNode
 import cn.enaium.jimmer.buddy.lang.parser.node.MemberNode
 import cn.enaium.jimmer.buddy.lang.parser.node.TypeNode
 import cn.enaium.jimmer.buddy.lang.parser.processor.JavaSourceProcessor
@@ -25,6 +25,7 @@ import cn.enaium.jimmer.buddy.project.structure.index.ClassIndexImpl
 import cn.enaium.jimmer.buddy.project.structure.jackson.ClassNodeMixin
 import cn.enaium.jimmer.buddy.project.structure.jackson.MemberNodeMixin
 import cn.enaium.jimmer.buddy.project.structure.jackson.TypeNodeMixin
+import cn.enaium.jimmer.buddy.project.structure.utility.findGitIgnorePath
 import org.gradle.tooling.GradleConnector
 import org.gradle.tooling.model.idea.IdeaProject
 import org.gradle.tooling.model.idea.IdeaSingleEntryLibraryDependency
@@ -50,7 +51,7 @@ class Environment {
     var isKotlinProject = false
 
     private val mapper: SmileMapper = SmileMapper.builder().addModule(kotlinModule())
-        .addMixIn(ClassNode::class.java, ClassNodeMixin::class.java)
+        .addMixIn(BaseClassNode::class.java, ClassNodeMixin::class.java)
         .addMixIn(MemberNode::class.java, MemberNodeMixin::class.java)
         .addMixIn(TypeNode::class.java, TypeNodeMixin::class.java)
         .build()
@@ -59,11 +60,11 @@ class Environment {
 
     fun getIndex(): ClassIndexImpl = classIndex ?: error("ClassIndex not initialized")
 
-    fun findClass(qualifiedName: String): ClassNode? = getIndex().findClass(qualifiedName)
+    fun findClass(qualifiedName: String): BaseClassNode? = getIndex().findClass(qualifiedName)
 
-    fun findClasses(directory: Path): List<ClassNode> = getIndex().findClasses(directory)
+    fun findClasses(directory: Path): List<BaseClassNode> = getIndex().findClasses(directory)
 
-    fun upsertClass(qualifiedName: String, classNode: ClassNode) = getIndex().upsertClass(qualifiedName, classNode)
+    fun upsertClass(qualifiedName: String, classNode: BaseClassNode) = getIndex().upsertClass(qualifiedName, classNode)
 
     private val onExits = mutableListOf<() -> Unit>()
 
@@ -73,6 +74,13 @@ class Environment {
             if (!cacheDirectory.exists()) {
                 cacheDirectory.createDirectory()
             }
+
+            findGitIgnorePath(directory)?.also {
+                if (!it.readText().contains(cacheDirectory.name)) {
+                    it.appendLines(listOf("${cacheDirectory.name}/"))
+                }
+            }
+
             val modulesCache = cacheDirectory / "modules.smile"
             val classesCache = cacheDirectory / "classes.smile"
             val dependenciesCache = cacheDirectory / "dependencies.smile"

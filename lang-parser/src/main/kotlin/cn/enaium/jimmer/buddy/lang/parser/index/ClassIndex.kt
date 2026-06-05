@@ -16,16 +16,16 @@
 
 package cn.enaium.jimmer.buddy.lang.parser.index
 
-import cn.enaium.jimmer.buddy.lang.parser.node.ClassNode
+import cn.enaium.jimmer.buddy.lang.parser.node.BaseClassNode
 import java.nio.file.Path
 
 /**
  * @author Enaium
  */
 interface ClassIndex {
-    fun findClass(qualifiedName: String): ClassNode?
+    fun findClass(qualifiedName: String): BaseClassNode?
 
-    fun findClasses(directory: Path): List<ClassNode>
+    fun findClasses(directory: Path): List<BaseClassNode>
 
-    fun upsertClass(qualifiedName: String, classNode: ClassNode)
+    fun upsertClass(qualifiedName: String, classNode: BaseClassNode)
 }

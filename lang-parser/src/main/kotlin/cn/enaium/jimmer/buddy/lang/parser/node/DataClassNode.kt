@@ -26,4 +26,4 @@ class DataClassNode(
     path: Path,
     annotations: Set<AnnotationEntryNode> = emptySet(),
     val parameter: Map<String, TypeNode>
-) : ClassNode(qualifiedName, path, annotations)
+) : BaseClassNode(qualifiedName, path, annotations)

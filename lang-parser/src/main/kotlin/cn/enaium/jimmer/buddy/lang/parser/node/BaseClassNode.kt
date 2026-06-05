@@ -14,13 +14,15 @@
  * limitations under the License.
  */
 
-package cn.enaium.jimmer.buddy.lang.parser.utility
+package cn.enaium.jimmer.buddy.lang.parser.node
 
-import JavaParser
-import cn.enaium.jimmer.buddy.lang.parser.node.ClassTypeNode
-import cn.enaium.jimmer.buddy.lang.parser.node.PrimitiveTypeNode
-import cn.enaium.jimmer.buddy.lang.parser.node.TypeNode
+import java.nio.file.Path
 
 /**
  * @author Enaium
  */
+open class BaseClassNode(
+    val qualifiedName: String,
+    val path: Path,
+    val annotations: Set<AnnotationEntryNode>,
+)

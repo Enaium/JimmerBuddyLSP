@@ -16,11 +16,10 @@
 
 package cn.enaium.jimmer.buddy.lang.parser.entity
 
-import cn.enaium.jimmer.buddy.lang.parser.node.ClassNode
+import cn.enaium.jimmer.buddy.lang.parser.node.BaseClassNode
 import org.babyfish.jimmer.sql.Entity
 import org.babyfish.jimmer.sql.Id
 import org.babyfish.jimmer.sql.Table
-import java.nio.file.Path
 
 /**
  * @author Enaium
@@ -31,7 +30,7 @@ interface ClassEntity {
     @Id
     val qualifiedName: String
 
-    val classNode: ClassNode
+    val classNode: BaseClassNode
 
     val path: String
 }

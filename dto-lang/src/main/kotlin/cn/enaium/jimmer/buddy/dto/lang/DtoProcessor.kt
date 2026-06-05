@@ -33,17 +33,9 @@ import java.util.*
  * @author Enaium
  */
 class DtoProcessor(val source: String) {
-
-    fun lex(): DtoLexer {
-        return DtoLexer(CharStreams.fromString(source))
-    }
-
-    fun parse(): DtoParser.DtoContext {
-        return DtoParser(CommonTokenStream(DtoLexer(CharStreams.fromString(source)))).dto()
-    }
-
     fun findCursor(line: Int, column: Int): ParserRuleContext? {
         val dtoParser = DtoParser(CommonTokenStream(DtoLexer(CharStreams.fromString(source))))
+        dtoParser.removeErrorListeners()
         val results = mutableListOf<ParserRuleContext>()
         dtoParser.addParseListener(object : ParseTreeListener {
             override fun visitTerminal(node: TerminalNode) {

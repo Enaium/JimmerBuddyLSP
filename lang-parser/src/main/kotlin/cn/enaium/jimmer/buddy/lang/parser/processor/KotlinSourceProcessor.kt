@@ -16,16 +16,20 @@
 
 package cn.enaium.jimmer.buddy.lang.parser.processor
 
-import KotlinLexer
-import KotlinParser
 import cn.enaium.jimmer.buddy.lang.parser.index.ClassIndex
 import cn.enaium.jimmer.buddy.lang.parser.node.*
+import cn.enaium.jimmer.buddy.lang.parser.utility.text
+import cn.enaium.jimmer.buddy.lang.parser.utility.types
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
-import org.antlr.v4.runtime.CharStreams
-import org.antlr.v4.runtime.CommonTokenStream
+import org.treesitter.TSNode
+import org.treesitter.TSParser
+import org.treesitter.TSQuery
+import org.treesitter.TSQueryCursor
+import org.treesitter.TSQueryMatch
+import org.treesitter.TreeSitterKotlin
 import java.nio.file.Path
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
@@ -49,8 +53,6 @@ class KotlinSourceProcessor(val sourceDirOrJar: Set<Path>, private val classInde
         parseFiles()
         return@coroutineScope classIndex
     }
-
-    // ======================== Scan Phase (regex-based, lightweight) ========================
 
     private suspend fun scanSource() = coroutineScope {
         sourceDirOrJar.mapNotNull { entry ->
@@ -116,8 +118,6 @@ class KotlinSourceProcessor(val sourceDirOrJar: Set<Path>, private val classInde
         }
     }
 
-    // ======================== Parse Phase (full ANTLR4, immediate indexing) ========================
-
     private suspend fun parseFiles() = coroutineScope {
         fileEntries.map { entry ->
             launch(Dispatchers.Default) {
@@ -127,211 +127,265 @@ class KotlinSourceProcessor(val sourceDirOrJar: Set<Path>, private val classInde
     }
 
     private fun parseAndIndex(content: String, path: Path) {
-        val kotlinLexer = KotlinLexer(CharStreams.fromString(content))
-        val kotlinParser = KotlinParser(CommonTokenStream(kotlinLexer))
-        kotlinLexer.removeErrorListeners()
-        kotlinParser.removeErrorListeners()
-        val kotlinFile = kotlinParser.kotlinFile()
+        val parser = TSParser()
+        val language = TreeSitterKotlin()
+        parser.setLanguage(language)
+        val parse = parser.parseString(null, content)
+        val query = TSQuery(
+            language, """(package_header) @package
+            |(import_header) @import
+            |(class_declaration) @class
+            """.trimMargin()
+        )
+        val cursor = TSQueryCursor()
+        cursor.exec(query, parse.rootNode)
+        val match = TSQueryMatch()
 
-        val pkg = kotlinFile.preamble()?.packageHeader()?.identifier()?.text ?: return
-        val imports = kotlinFile.preamble()?.importList()?.importHeader()?.map { importHeader ->
-            importHeader.identifier().text.let { identifier ->
-                importHeader.MULT()?.let { "$identifier.*" } ?: identifier
-            }
-        }?.toSet() ?: emptySet()
+        var pkg = ""
+        val imports = mutableSetOf<String>()
 
-        val topLevelObjects = kotlinFile.topLevelObject()
-        kotlinFile.children?.clear()
-
-        topLevelObjects.forEach { topLevelObject ->
-            topLevelObject.classDeclaration()?.also { classDeclarationContext ->
-                val name = classDeclarationContext.simpleIdentifier()?.text ?: return@forEach
-                val annotations =
-                    classDeclarationContext.modifierList()?.annotations()
-                        ?.map { it.annotation().asAnnotationEntryNode(pkg, imports) }?.toSet()
-                        ?: emptySet()
-
-                // class
-                classDeclarationContext.CLASS()?.also {
-                    // enum
-                    classDeclarationContext.modifierList()?.modifier()
-                        ?.any { it.classModifier()?.ENUM() != null }
-                        ?.also {
-                            val entries = classDeclarationContext.enumClassBody()?.enumEntries()?.enumEntry()
-                                ?.mapNotNull { EnumEntryNode(it.simpleIdentifier().text) }?.toSet() ?: emptySet()
-                            classIndex.upsertClass(
-                                "$pkg.$name",
-                                EnumClassNode("$pkg.$name", path, annotations, entries)
-                            )
-                        } ?: run {
-                        classIndex.upsertClass("$pkg.$name", ClassClassNode("$pkg.$name", path))
+        while (cursor.nextMatch(match)) {
+            match.captures.forEach { capture ->
+                val captureName = query.getCaptureNameForId(capture.index)
+                when (captureName) {
+                    "package" -> {
+                        pkg = capture.node.types("identifier").firstOrNull()
+                            ?.let { node ->
+                                node.types("simple_identifier").mapNotNull { it.text(content) }
+                                    .joinToString(".")
+                            } ?: ""
                     }
-                    classDeclarationContext.modifierList()?.modifier()
-                        ?.any { it.classModifier()?.ANNOTATION() != null }?.also {
-                            classIndex.upsertClass("$pkg.$name", AnnotationClassNode("$pkg.$name", path, annotations))
-                        }
-                    classDeclarationContext.modifierList()?.modifier()
-                        ?.any { it.classModifier()?.DATA() != null }
-                        ?.also {
-                            val parameters =
-                                classDeclarationContext.primaryConstructor()?.classParameters()?.classParameter()
-                                    ?.mapNotNull {
-                                        it.simpleIdentifier().text to (it.type().asTypeNode(pkg, imports)
-                                            ?: return@mapNotNull null)
-                                    }?.toMap() ?: emptyMap()
-                            classIndex.upsertClass(
-                                "$pkg.$name",
-                                DataClassNode("$pkg.$name", path, annotations, parameters)
+
+                    "import" -> {
+                        capture.node.types("identifier").firstOrNull()?.let { id ->
+                            val name = id.types("simple_identifier").mapNotNull { it.text(content) }
+                                .joinToString(".")
+                            imports.add(
+                                if (capture.node.types("wildcard_import").isNotEmpty()) "$name.*"
+                                else name
                             )
                         }
-                }
+                    }
 
-                // interface
-                classDeclarationContext.INTERFACE()?.also {
-                    val supers = classDeclarationContext.delegationSpecifiers()?.delegationSpecifier()?.mapNotNull {
-                        it.asTypeNode(pkg, imports)
-                    }?.toSet() ?: emptySet()
-
-                    val properties = classDeclarationContext.classBody()?.classMemberDeclaration()
-                        ?.mapNotNull { it.propertyDeclaration()?.asPropertyNode("$pkg.$name", pkg, imports) }?.toSet()
-                        ?: classDeclarationContext.delegationSpecifiers()?.delegationSpecifier()?.lastOrNull()
-                            ?.constructorInvocation()?.callSuffix()?.annotatedLambda()?.firstOrNull()
-                            ?.functionLiteral()?.statements()?.statement()
-                            ?.mapNotNull {
-                                it.declaration()?.propertyDeclaration()?.asPropertyNode("$pkg.$name", pkg, imports)
-                            }
+                    "class" -> {
+                        val name = capture.node.types("type_identifier").firstOrNull()?.text(content)
+                            ?: return@forEach
+                        val qualifiedName = "$pkg.$name"
+                        val annotations = capture.node.types("modifiers").firstOrNull()
+                            ?.types("annotation")
+                            ?.mapNotNull { it.asAnnotationEntryNode(content, pkg, imports) }
                             ?.toSet() ?: emptySet()
 
-                    classIndex.upsertClass(
-                        "$pkg.$name",
-                        InterfaceNode("$pkg.$name", path, annotations, supers = supers, members = properties)
-                    )
+                        val keyword = (0 until capture.node.childCount)
+                            .map { capture.node.getChild(it) }
+                            .firstOrNull { it.type in setOf("interface", "enum", "class") }
+                            ?.type
+
+                        when (keyword) {
+                            "interface" -> {
+                                val supers = capture.node.types("delegation_specifier")
+                                    .mapNotNull { it.asTypeNode(content, pkg, imports) }
+                                    .toSet()
+
+                                val properties = capture.node.types("class_body").firstOrNull()
+                                    ?.types("property_declaration")
+                                    .orEmpty()
+                                    .mapNotNull { it.asPropertyNode(content, qualifiedName, pkg, imports) }
+                                    .toSet()
+
+                                classIndex.upsertClass(
+                                    qualifiedName,
+                                    InterfaceNode(
+                                        qualifiedName, path, annotations,
+                                        supers = supers, members = properties
+                                    )
+                                )
+                            }
+
+                            "enum" -> {
+                                val entries = capture.node.types("enum_entry")
+                                    .mapNotNull {
+                                        it.types("type_identifier").firstOrNull()?.text(content)
+                                            ?.let { n -> EnumEntryNode(n) }
+                                    }.toSet()
+
+                                classIndex.upsertClass(
+                                    qualifiedName,
+                                    EnumClassNode(qualifiedName, path, annotations, entries)
+                                )
+                            }
+
+                            "class" -> {
+                                val modifierNodes = capture.node.types("modifiers").firstOrNull()
+                                val modifierKeywords = if (modifierNodes != null) {
+                                    (0 until modifierNodes.childCount)
+                                        .map { modifierNodes.getChild(it).type }.toSet()
+                                } else emptySet()
+
+                                when {
+                                    "annotation" in modifierKeywords -> {
+                                        classIndex.upsertClass(
+                                            qualifiedName,
+                                            AnnotationClassNode(qualifiedName, path, annotations)
+                                        )
+                                    }
+
+                                    "data" in modifierKeywords -> {
+                                        val parameters = capture.node.types("class_parameter")
+                                            .mapNotNull { param ->
+                                                val paramName = param.types("simple_identifier").firstOrNull()
+                                                    ?.text(content) ?: return@mapNotNull null
+                                                val paramType = param.types("type").firstOrNull()
+                                                    ?.asTypeNode(content, pkg, imports)
+                                                    ?: return@mapNotNull null
+                                                paramName to paramType
+                                            }.toMap()
+                                        classIndex.upsertClass(
+                                            qualifiedName,
+                                            DataClassNode(qualifiedName, path, annotations, parameters)
+                                        )
+                                    }
+
+                                    else -> {
+                                        classIndex.upsertClass(
+                                            qualifiedName,
+                                            ClassNode(qualifiedName, path, annotations)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
-
-            topLevelObject.children?.clear()
         }
     }
 
-    // ======================== Helper methods ========================
-
-    private fun KotlinParser.PropertyDeclarationContext.asPropertyNode(
+    private fun TSNode.asPropertyNode(
+        content: String,
         className: String,
         pkg: String,
         imports: Set<String>
     ): PropertyNode? {
-        val name = this.variableDeclaration()?.simpleIdentifier()?.text ?: return null
-        val asTypeNode = this.variableDeclaration().type()?.asTypeNode(pkg, imports) ?: return null
-        val annotations =
-            this.modifierList()?.annotations()?.map { it.annotation().asAnnotationEntryNode(pkg, imports) }?.toSet()
-                ?: emptySet()
-        return PropertyNode(className, name, asTypeNode, annotations, this.getter() != null, this.setter() != null)
+        val bindingPatternKind = this.types("binding_pattern_kind").firstOrNull() ?: return null
+        val variableDecl = this.types("variable_declaration").firstOrNull() ?: return null
+        val name = variableDecl.types("simple_identifier").firstOrNull()?.text(content) ?: return null
+        val type = (variableDecl.types("user_type").firstOrNull()
+            ?: variableDecl.types("nullable_type").firstOrNull())
+            ?.asTypeNode(content, pkg, imports) ?: return null
+        val annotations = this.types("modifiers").firstOrNull()
+            ?.types("annotation")
+            ?.mapNotNull { it.asAnnotationEntryNode(content, pkg, imports) }
+            ?.toSet() ?: emptySet()
+        return PropertyNode(className, name, type, annotations)
     }
 
-    private fun KotlinParser.TypeContext.asTypeNode(pkg: String, imports: Set<String>): TypeNode? {
-        val simpleUserType =
-            (this.typeReference() ?: this.nullableType()?.typeReference())?.userType()?.simpleUserType() ?: return null
-        val nullable = this.nullableType() != null
-        val name = simpleUserType.map { it.simpleIdentifier() }.joinToString(".") { it.text }
-        val qualifiedName =
-            findQualifiedName(pkg, imports, name)
-        val arguments =
-            simpleUserType.lastOrNull()?.typeArguments()?.typeProjection()
-                ?.mapNotNull { it.type()?.asTypeNode(pkg, imports) }?.toSet() ?: emptySet()
-        return ClassTypeNode(name, qualifiedName, nullable, name.endsWith("Array"), arguments)
+    private fun TSNode.asTypeNode(content: String, pkg: String, imports: Set<String>): TypeNode? {
+        return when (this.type) {
+            "user_type" -> {
+                val identifiers = this.types("type_identifier").mapNotNull { it.text(content) }
+                if (identifiers.isEmpty()) return null
+                val name = identifiers.joinToString(".")
+                val qualifiedName = findQualifiedName(pkg, imports, name)
+                val arguments = mutableSetOf<TypeNode>()
+                this.types("type_arguments").firstOrNull()?.let { typeArgs ->
+                    for (i in 0 until typeArgs.childCount) {
+                        val child = typeArgs.getChild(i)
+                        child.asTypeNode(content, pkg, imports)?.let { arguments.add(it) }
+                    }
+                }
+                ClassTypeNode(name, qualifiedName, arguments = arguments)
+            }
+
+            "nullable_type" -> {
+                val inner = this.types("user_type").firstOrNull()?.asTypeNode(content, pkg, imports) ?: return null
+                if (inner is ClassTypeNode) {
+                    ClassTypeNode(inner.name, inner.qualifiedName, nullable = true, array = inner.array, arguments = inner.arguments)
+                } else {
+                    inner
+                }
+            }
+
+            "type_projection" -> {
+                this.types("user_type").firstOrNull()?.asTypeNode(content, pkg, imports)
+            }
+
+            "type" -> {
+                this.types("user_type").firstOrNull()?.asTypeNode(content, pkg, imports)
+                    ?: this.types("type_identifier").firstOrNull()?.let {
+                        val name = it.text(content) ?: return@let null
+                        ClassTypeNode(name, findQualifiedName(pkg, imports, name))
+                    }
+            }
+
+            "type_identifier" -> {
+                val name = this.text(content) ?: return null
+                ClassTypeNode(name, findQualifiedName(pkg, imports, name))
+            }
+
+            "delegation_specifier" -> {
+                this.types("user_type").firstOrNull()?.asTypeNode(content, pkg, imports)
+                    ?: this.types("constructor_invocation").firstOrNull()
+                        ?.types("user_type")?.firstOrNull()?.asTypeNode(content, pkg, imports)
+            }
+
+            else -> null
+        }
     }
 
-    private fun KotlinParser.AnnotationContext.asAnnotationEntryNode(
+    private fun TSNode.asAnnotationEntryNode(
+        content: String,
         pkg: String,
         imports: Set<String>
-    ): AnnotationEntryNode {
-        val name =
-            this.LabelReference()?.text?.substringAfter("@") + this.simpleIdentifier().joinToString(".") { it.text }
+    ): AnnotationEntryNode? {
+        // Annotations with arguments: annotation wraps @ + constructor_invocation
+        // Annotations without arguments: annotation wraps @ + user_type
+        val invocation = this.types("constructor_invocation").firstOrNull()
+        val userType = invocation?.types("user_type")?.firstOrNull()
+            ?: this.types("user_type").firstOrNull() ?: return null
+        val identifiers = userType.types("type_identifier").mapNotNull { it.text(content) }
+        if (identifiers.isEmpty()) return null
+        val name = identifiers.joinToString(".")
         val qualifiedName = findQualifiedName(pkg, imports, name)
-        val arguments =
-            this.valueArguments()?.valueArgument()?.map { it.asAnnotationArgumentNode(pkg, imports) }?.toSet()
-                ?: emptySet()
-
+        val arguments = if (invocation != null) {
+            invocation.types("value_arguments").firstOrNull()
+                ?.types("value_argument")
+                ?.mapNotNull { it.asAnnotationArgumentNode(content, pkg, imports) }
+                ?.toSet() ?: emptySet()
+        } else {
+            emptySet()
+        }
         return AnnotationEntryNode(name, qualifiedName, arguments)
     }
 
-    private fun KotlinParser.ValueArgumentContext.asAnnotationArgumentNode(
+    private fun TSNode.asAnnotationArgumentNode(
+        content: String,
         pkg: String,
         imports: Set<String>
-    ): AnnotationArgumentNode {
-        val name = this.simpleIdentifier()?.text ?: "value"
-        val value = this.expression()?.asAny(pkg, imports)
-        return AnnotationArgumentNode(name, value)
+    ): AnnotationArgumentNode? {
+        val key = this.types("simple_identifier").firstOrNull()?.text(content) ?: "value"
+        val value = this.asAnnotationValue(content)
+        return AnnotationArgumentNode(key, value)
     }
 
-    private fun KotlinParser.ExpressionContext.asAny(pkg: String, imports: Set<String>): Any? {
-        val postfixUnaryExpression =
-            this.disjunction()?.firstOrNull()?.conjunction()?.firstOrNull()?.equalityComparison()
-                ?.firstOrNull()?.comparison()?.firstOrNull()?.namedInfix()?.firstOrNull()?.elvisExpression()
-                ?.firstOrNull()
-                ?.infixFunctionCall()?.firstOrNull()?.rangeExpression()?.firstOrNull()?.additiveExpression()
-                ?.firstOrNull()
-                ?.multiplicativeExpression()?.firstOrNull()?.typeRHS()?.firstOrNull()?.prefixUnaryExpression()
-                ?.firstOrNull()?.postfixUnaryExpression()
-
-        postfixUnaryExpression?.atomicExpression()?.also { atomicExpression ->
-            atomicExpression.literalConstant()?.let {
-                return it.stringLiteral()
-                    ?.let { stringLiteral ->
-                        stringLiteral.lineStringLiteral()?.lineStringContent()
-                            ?.joinToString { lineStringContentContext -> lineStringContentContext.text }
-                            ?: stringLiteral.multiLineStringLiteral()?.lineStringLiteral()
-                                ?.joinToString { content -> content.text }
-                    }
-                    ?: it.IntegerLiteral()?.text?.toInt()
-                    ?: it.RealLiteral()?.text?.toDouble()
-                    ?: it.BooleanLiteral()?.text?.toBoolean()
-                    ?: it.LongLiteral()?.text?.toLong()
-                    ?: it.HexLiteral()?.text?.toInt()
-                    ?: it.BinLiteral()?.text?.toInt()
-                    ?: it.CharacterLiteral()?.text?.toInt()?.toChar()
-            }
-            atomicExpression.collectionLiteral()?.let { collection ->
-                return collection.expression()?.map { it.asAny(pkg, imports) }
+    private fun TSNode.asAnnotationValue(content: String): Any? {
+        return when (this.type) {
+            "string_literal" -> this.text(content)?.substringAfter("\"")?.substringBeforeLast("\"")
+            "integer_literal" -> this.text(content)?.toIntOrNull()
+            "boolean_literal" -> this.text(content)?.toBoolean()
+            "null_literal" -> null
+            "simple_identifier" -> this.text(content)
+            "scoped_identifier" -> this.text(content)
+            "real_literal" -> this.text(content)?.toFloatOrNull()
+            else -> {
+                // Check children for value types
+                for (i in 0 until this.childCount) {
+                    val child = this.getChild(i)
+                    child.asAnnotationValue(content)?.let { return it }
+                }
+                null
             }
         }
-
-        if (postfixUnaryExpression?.let {
-                it.atomicExpression() != null && it.postfixUnaryOperation().isNotEmpty()
-            } == true) {
-            postfixUnaryExpression.asTypeNode(pkg, imports)
-        }
-        return null
-    }
-
-    private fun KotlinParser.DelegationSpecifierContext.asTypeNode(pkg: String, imports: Set<String>): TypeNode? {
-        val name = (this.userType() ?: this.constructorInvocation()?.userType())?.simpleUserType()
-            ?.map { it.simpleIdentifier() }?.joinToString(".") { it.text } ?: return null
-        val qualifiedName = findQualifiedName(pkg, imports, name)
-        return ClassTypeNode(name, qualifiedName)
-    }
-
-    private fun KotlinParser.PostfixUnaryExpressionContext.asTypeNode(
-        pkg: String,
-        imports: Set<String>,
-        name: String = ""
-    ): TypeNode? {
-        val n = this.atomicExpression()?.simpleIdentifier()?.text?.let { identifier ->
-            name.takeIf { it.isNotBlank() }?.let { "$it.$identifier" } ?: identifier
-        } ?: return null
-
-        this.postfixUnaryOperation()?.firstOrNull()?.postfixUnaryExpression()?.also { postfixUnaryExpression ->
-            return postfixUnaryExpression.asTypeNode(pkg, imports, n)
-        }
-
-        this.callableReference()?.userType()?.simpleUserType()?.firstOrNull()
-            ?.simpleIdentifier()?.text?.also { identifier ->
-                val qualifiedName =
-                    findQualifiedName(pkg, imports, n)
-                return ClassTypeNode(n, qualifiedName)
-            }
-
-        return null
     }
 
     /**
@@ -349,7 +403,7 @@ class KotlinSourceProcessor(val sourceDirOrJar: Set<Path>, private val classInde
         imports.find { it.endsWith(name) }?.also { return it }
         // Wildcard imports: expand each and check against known qualified names
         imports.filter { it.endsWith("*") }.forEach { import ->
-            val qualifiedName = "${import.substringBeforeLast(".*")}.${name}"
+            val qualifiedName = "${import.substringBeforeLast(".*")}.$name"
             if (qualifiedName in allQualifiedNames || classIndex.findClass(qualifiedName) != null) {
                 return qualifiedName
             }

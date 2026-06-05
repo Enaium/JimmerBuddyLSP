@@ -17,7 +17,6 @@
 package cn.enaium.jimmer.buddy.codegen.gen
 
 import cn.enaium.jimmer.buddy.codegen.symbol.Source
-import cn.enaium.jimmer.buddy.lang.parser.node.ClassNode
 import cn.enaium.jimmer.buddy.project.structure.Environment
 import java.nio.file.Path
 import kotlin.io.path.createParentDirectories

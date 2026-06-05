@@ -28,4 +28,4 @@ class InterfaceNode(
     val parameters: Set<TypeNode> = emptySet(),
     val supers: Set<TypeNode> = emptySet(),
     val members: Set<MemberNode> = emptySet(),
-) : ClassNode(qualifiedName, path, annotations)
+) : BaseClassNode(qualifiedName, path, annotations)

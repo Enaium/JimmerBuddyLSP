@@ -16,7 +16,7 @@
 
 package cn.enaium.jimmer.buddy.lang.parser.index
 
-import cn.enaium.jimmer.buddy.lang.parser.node.ClassNode
+import cn.enaium.jimmer.buddy.lang.parser.node.BaseClassNode
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.absolutePathString
@@ -26,24 +26,24 @@ import kotlin.io.path.absolutePathString
  */
 class InMemoryClassIndex : ClassIndex {
 
-    private val classes = ConcurrentHashMap<String, ClassNode>()
+    private val classes = ConcurrentHashMap<String, BaseClassNode>()
 
     constructor()
 
-    constructor(classes: Map<String, ClassNode>) {
+    constructor(classes: Map<String, BaseClassNode>) {
         this.classes.putAll(classes)
     }
 
-    override fun findClass(qualifiedName: String): ClassNode? {
+    override fun findClass(qualifiedName: String): BaseClassNode? {
         return classes[qualifiedName]
     }
 
-    override fun findClasses(directory: Path): List<ClassNode> {
+    override fun findClasses(directory: Path): List<BaseClassNode> {
         val prefix = directory.absolutePathString()
         return classes.values.filter { it.path.absolutePathString().startsWith(prefix) }
     }
 
-    override fun upsertClass(qualifiedName: String, classNode: ClassNode) {
+    override fun upsertClass(qualifiedName: String, classNode: BaseClassNode) {
         classes[qualifiedName] = classNode
     }
 }

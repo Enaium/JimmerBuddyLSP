@@ -16,16 +16,16 @@
 
 package cn.enaium.jimmer.buddy.dto.lang
 
-import cn.enaium.jimmer.buddy.lang.parser.node.ClassNode
+import cn.enaium.jimmer.buddy.lang.parser.node.BaseClassNode
 import cn.enaium.jimmer.buddy.project.structure.Project
 
 /**
  * @author Enaium
  */
 class Context(val project: Project) {
-    private val sourceCache = mutableMapOf<String, ClassNode>()
+    private val sourceCache = mutableMapOf<String, BaseClassNode>()
 
-    fun ofSource(qualifiedName: String): ClassNode? {
+    fun ofSource(qualifiedName: String): BaseClassNode? {
         return sourceCache[qualifiedName] ?: project.environment.findClass(qualifiedName)?.also {
             sourceCache[qualifiedName] = it
         }

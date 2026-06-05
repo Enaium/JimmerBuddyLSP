@@ -23,6 +23,7 @@ import com.google.devtools.ksp.KspExperimental
 import com.google.devtools.ksp.getClassDeclarationByName
 import com.google.devtools.ksp.processing.*
 import com.google.devtools.ksp.symbol.*
+import org.babyfish.jimmer.Scalar
 import org.babyfish.jimmer.ksp.Context
 import org.babyfish.jimmer.ksp.immutable.meta.ImmutableType
 import java.io.ByteArrayOutputStream
@@ -34,16 +35,16 @@ import java.io.OutputStream
  */
 class KspProcessor(val environment: Environment) {
     val caches = mutableMapOf<String, KSClassDeclaration>()
-    private val classCache = mutableMapOf<String, ClassNode?>()
+    private val classCache = mutableMapOf<String, BaseClassNode?>()
 
-    private fun findClass(qualifiedName: String?): ClassNode? {
+    private fun findClass(qualifiedName: String?): BaseClassNode? {
         if (qualifiedName == null) return null
         return classCache.getOrPut(qualifiedName) {
             environment.findClass(qualifiedName)
         }
     }
 
-    fun process(genClass: Set<ClassNode>): Ksp {
+    fun process(genClass: Set<BaseClassNode>): Ksp {
         val ksFiles = mutableListOf<KSFile>()
         val ksClassDeclarationCaches = mutableMapOf<String, KSClassDeclaration>()
         genClass.forEach {
@@ -132,14 +133,14 @@ class KspProcessor(val environment: Environment) {
         )
     }
 
-    fun toImmutable(classNode: ClassNode): ImmutableType {
+    fun toImmutable(classNode: BaseClassNode): ImmutableType {
         val (resolver, kspEnvironment, sources) = KspProcessor(this.environment).process(emptySet())
         val context = Context(resolver, kspEnvironment)
         val classDeclarationByName = resolver.getClassDeclarationByName(classNode.qualifiedName)!!
         return context.typeOf(classDeclarationByName)
     }
 
-    fun ClassNode.asKSClassDeclaration(): KSClassDeclaration {
+    fun BaseClassNode.asKSClassDeclaration(): KSClassDeclaration {
         return caches[this.qualifiedName] ?: createKSClassDeclaration(
             qualifiedName = { createKSName(this.qualifiedName) },
             classKind = {
@@ -161,7 +162,7 @@ class KspProcessor(val environment: Environment) {
             superTypes = {
                 when (this) {
                     is InterfaceNode -> this.supers
-                    is ClassClassNode -> this.supers
+                    is ClassNode -> this.supers
                     else -> emptySet()
                 }.mapNotNull {
                     if (it is ClassTypeNode) {
@@ -252,7 +253,7 @@ class KspProcessor(val environment: Environment) {
                         this.parameters
                     }
 
-                    is ClassClassNode -> {
+                    is ClassNode -> {
                         this.parameters
                     }
 
@@ -338,7 +339,9 @@ class KspProcessor(val environment: Environment) {
     }
 
     private fun AnnotationEntryNode.asKSAnnotation(): KSAnnotation? {
-        val fqName = this@asKSAnnotation.qualifiedName ?: return null
+        val fqName =
+            this@asKSAnnotation.qualifiedName?.takeIf { it.startsWith(Scalar::class.java.packageName) } ?: return null
+
         return createKSAnnotation(
             annotationType = createKSTypeReference(
                 resolve = {

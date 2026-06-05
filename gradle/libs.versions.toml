@@ -13,6 +13,9 @@ jspecify = "1.0.0"
 jimmer = "0.10.7"
 gradle = "9.5.0"
 sqlite = "3.53.1.0"
+treeSitter = "0.26.6"
+treeSitterJava = "0.23.5"
+treeSitterKotlin = "0.3.8.1"
 
 [libraries]
 lsp4j = { module = "org.eclipse.lsp4j:org.eclipse.lsp4j", version.ref = "lsp4j" }
@@ -32,6 +35,9 @@ symbol-processing-api = { module = "com.google.devtools.ksp:symbol-processing-ap
 jspecify = { group = "org.jspecify", name = "jspecify", version.ref = "jspecify" }
 gradle-tooling-api = { module = "org.gradle:gradle-tooling-api", version.ref = "gradle" }
 sqlite = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite" }
+tree-sitter = { module = "io.github.bonede:tree-sitter", version.ref = "treeSitter" }
+tree-sitter-java = { module = "io.github.bonede:tree-sitter-java", version.ref = "treeSitterJava" }
+tree-sitter-kotlin = { module = "io.github.bonede:tree-sitter-kotlin", version.ref = "treeSitterKotlin" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

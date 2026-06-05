@@ -55,16 +55,16 @@ class AptProcessor(
     val environment: Environment
 ) {
     val caches = mutableMapOf<String, TypeElement>()
-    private val classCache = mutableMapOf<String, ClassNode?>()
+    private val classCache = mutableMapOf<String, BaseClassNode?>()
 
-    private fun findClass(qualifiedName: String?): ClassNode? {
+    private fun findClass(qualifiedName: String?): BaseClassNode? {
         if (qualifiedName == null) return null
         return classCache.getOrPut(qualifiedName) {
             environment.findClass(qualifiedName)
         }
     }
 
-    fun process(genClasses: Set<ClassNode>): Apt {
+    fun process(genClasses: Set<BaseClassNode>): Apt {
         val typeElementCaches = mutableMapOf<String, TypeElement>()
         genClasses.forEach { klass ->
             val qualifiedName = klass.qualifiedName
@@ -447,13 +447,13 @@ class AptProcessor(
         )
     }
 
-    fun toImmutable(classNode: ClassNode): ImmutableType {
+    fun toImmutable(classNode: BaseClassNode): ImmutableType {
         val (pe, rootElements, sources) = AptProcessor(environment).process(emptySet())
         val context = createContext(pe.elementUtils, pe.typeUtils, pe.filer)
         return context.getImmutableType(pe.elementUtils.getTypeElement(classNode.qualifiedName))
     }
 
-    fun ClassNode.asTypeElement(): TypeElement {
+    fun BaseClassNode.asTypeElement(): TypeElement {
         return caches[qualifiedName] ?: createTypeElement(
             getEnclosedElements = {
                 when (this) {
@@ -539,7 +539,7 @@ class AptProcessor(
                 }
             },
             getSuperclass = {
-                if (this is ClassClassNode) {
+                if (this is ClassNode) {
                     this.supers.filterIsInstance<ClassTypeNode>()
                         .find { findClass(it.qualifiedName) !is InterfaceNode }
                         ?.asTypeMirror()
@@ -549,7 +549,7 @@ class AptProcessor(
             },
             getTypeParameters = {
                 when (this) {
-                    is ClassClassNode -> {
+                    is ClassNode -> {
                         this.parameters
                     }
 
@@ -592,7 +592,7 @@ class AptProcessor(
         )
     }
 
-    fun MethodNode.asExecutableElement(classNode: ClassNode): ExecutableElement {
+    fun MethodNode.asExecutableElement(classNode: BaseClassNode): ExecutableElement {
         return createExecutableElement(
             getKind = { ElementKind.METHOD },
             getSimpleName = { createName(this.name) },
@@ -606,7 +606,10 @@ class AptProcessor(
                 this.annotations.find { it.qualifiedName == annotation.name }?.findAnnotation()
             },
             getAnnotationMirrors = {
-                this.annotations.mapNotNull { it.findAnnotation()?.asAnnotationMirror() }
+                this.annotations.mapNotNull {
+                    it.takeIf { it.qualifiedName?.startsWith(Scalar::class.java.packageName) == true }?.findAnnotation()
+                        ?.asAnnotationMirror()
+                }
             },
             getAnnotationsByType = { annotation ->
                 this.annotations.find { it.qualifiedName == annotation.name }?.findAnnotation()?.let { arrayOf(it) }

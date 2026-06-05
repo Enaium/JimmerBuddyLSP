@@ -26,4 +26,4 @@ class EnumClassNode(
     path: Path,
     annotations: Set<AnnotationEntryNode> = emptySet(),
     val entries: Set<EnumEntryNode>
-) : ClassNode(qualifiedName, path, annotations)
+) : BaseClassNode(qualifiedName, path, annotations)

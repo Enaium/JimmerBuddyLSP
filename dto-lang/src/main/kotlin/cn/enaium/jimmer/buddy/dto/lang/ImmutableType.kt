@@ -16,7 +16,7 @@
 
 package cn.enaium.jimmer.buddy.dto.lang
 
-import cn.enaium.jimmer.buddy.lang.parser.node.ClassNode
+import cn.enaium.jimmer.buddy.lang.parser.node.BaseClassNode
 import cn.enaium.jimmer.buddy.lang.parser.node.ClassTypeNode
 import cn.enaium.jimmer.buddy.lang.parser.node.InterfaceNode
 import org.babyfish.jimmer.dto.compiler.spi.BaseType
@@ -31,7 +31,7 @@ import kotlin.collections.iterator
  */
 data class ImmutableType(
     val context: Context,
-    val classNode: ClassNode
+    val classNode: BaseClassNode
 ) : BaseType {
     val superTypes: List<ImmutableType> = if (classNode is InterfaceNode) {
         classNode.supers.filterIsInstance<ClassTypeNode>().mapNotNull { context.ofType(it.qualifiedName ?: it.name) }

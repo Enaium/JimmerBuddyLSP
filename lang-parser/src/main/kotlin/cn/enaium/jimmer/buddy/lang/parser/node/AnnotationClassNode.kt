@@ -25,4 +25,4 @@ class AnnotationClassNode(
     qualifiedName: String,
     path: Path,
     annotations: Set<AnnotationEntryNode> = emptySet()
-) : ClassNode(qualifiedName, path, annotations)
+) : BaseClassNode(qualifiedName, path, annotations)

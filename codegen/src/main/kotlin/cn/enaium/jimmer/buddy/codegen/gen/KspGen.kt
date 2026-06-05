@@ -19,7 +19,7 @@ package cn.enaium.jimmer.buddy.codegen.gen
 import cn.enaium.jimmer.buddy.codegen.symbol.KspProcessor
 import cn.enaium.jimmer.buddy.codegen.utility.createKspOption
 import cn.enaium.jimmer.buddy.codegen.utility.toDtoFile
-import cn.enaium.jimmer.buddy.lang.parser.node.ClassNode
+import cn.enaium.jimmer.buddy.lang.parser.node.BaseClassNode
 import cn.enaium.jimmer.buddy.project.structure.Environment
 import com.google.devtools.ksp.getClassDeclarationByName
 import org.babyfish.jimmer.dto.compiler.Anno
@@ -39,7 +39,7 @@ class KspGen(
     genDir: Path,
     options: Map<String, String>
 ) : Gen(projectDir, environment, genDir, options) {
-    fun sourceProcess(genClasses: Set<ClassNode>) {
+    fun sourceProcess(genClasses: Set<BaseClassNode>) {
         try {
             val (resolver, environment, sources) = KspProcessor(environment).process(genClasses)
 

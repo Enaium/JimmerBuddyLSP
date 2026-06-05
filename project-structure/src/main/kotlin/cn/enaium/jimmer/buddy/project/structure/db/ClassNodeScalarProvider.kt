@@ -16,8 +16,7 @@
 
 package cn.enaium.jimmer.buddy.project.structure.db
 
-import cn.enaium.jimmer.buddy.lang.parser.entity.ClassEntity
-import cn.enaium.jimmer.buddy.lang.parser.node.ClassNode
+import cn.enaium.jimmer.buddy.lang.parser.node.BaseClassNode
 import cn.enaium.jimmer.buddy.lang.parser.node.MemberNode
 import cn.enaium.jimmer.buddy.lang.parser.node.TypeNode
 import cn.enaium.jimmer.buddy.project.structure.jackson.ClassNodeMixin
@@ -30,18 +29,18 @@ import tools.jackson.module.kotlin.kotlinModule
 /**
  * @author Enaium
  */
-class ClassNodeScalarProvider : AbstractScalarProvider<ClassNode, ByteArray>() {
+class ClassNodeScalarProvider : AbstractScalarProvider<BaseClassNode, ByteArray>() {
     private val mapper: SmileMapper = SmileMapper.builder().addModule(kotlinModule())
-        .addMixIn(ClassNode::class.java, ClassNodeMixin::class.java)
+        .addMixIn(BaseClassNode::class.java, ClassNodeMixin::class.java)
         .addMixIn(MemberNode::class.java, MemberNodeMixin::class.java)
         .addMixIn(TypeNode::class.java, TypeNodeMixin::class.java)
         .build()
 
-    override fun toScalar(sqlValue: ByteArray): ClassNode {
-        return mapper.readValue(sqlValue, ClassNode::class.java)
+    override fun toScalar(sqlValue: ByteArray): BaseClassNode {
+        return mapper.readValue(sqlValue, BaseClassNode::class.java)
     }
 
-    override fun toSql(scalarValue: ClassNode): ByteArray {
+    override fun toSql(scalarValue: BaseClassNode): ByteArray {
         return mapper.writeValueAsBytes(scalarValue)
     }
 }

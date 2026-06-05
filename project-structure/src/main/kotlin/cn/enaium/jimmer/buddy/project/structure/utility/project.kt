@@ -20,6 +20,7 @@ import java.nio.file.Path
 import kotlin.io.path.div
 import kotlin.io.path.exists
 import kotlin.io.path.isDirectory
+import kotlin.io.path.name
 
 /**
  * @author Enaium
@@ -42,6 +43,15 @@ fun findProjectDir(dtoPath: Path, root: Boolean = false): Path? {
         parent = parent.parent
     }
     return rootPath
+}
+
+fun findGitIgnorePath(directory: Path): Path? {
+    val file = directory / ".gitignore"
+    return if (file.exists()) {
+        file
+    } else {
+        directory.parent?.let { findGitIgnorePath(it) }
+    }
 }
 
 

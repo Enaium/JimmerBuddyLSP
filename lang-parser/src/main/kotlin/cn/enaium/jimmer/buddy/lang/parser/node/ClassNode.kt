@@ -21,8 +21,11 @@ import java.nio.file.Path
 /**
  * @author Enaium
  */
-open class ClassNode(
-    val qualifiedName: String,
-    val path: Path,
-    val annotations: Set<AnnotationEntryNode>,
-)
+class ClassNode(
+    qualifiedName: String,
+    path: Path,
+    annotations: Set<AnnotationEntryNode> = emptySet(),
+    val parameters: Set<TypeNode> = emptySet(),
+    val supers: Set<TypeNode> = emptySet(),
+    val members: Set<MemberNode> = emptySet(),
+) : BaseClassNode(qualifiedName, path, annotations)

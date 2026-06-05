@@ -22,6 +22,7 @@ import cn.enaium.jimmer.buddy.lang.parser.node.InterfaceNode
 import cn.enaium.jimmer.buddy.lang.parser.node.MethodNode
 import cn.enaium.jimmer.buddy.lang.parser.processor.JavaSourceProcessor
 import kotlinx.coroutines.runBlocking
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -85,7 +86,18 @@ class JavaProcessorTest {
                 assertNotNull((index.findClass(entity) as? InterfaceNode)?.supers?.find { (it as? ClassTypeNode)?.qualifiedName == "cn.enaium.BaseEntity" })
             }
 
+            assertNotNull(((index.findClass("cn.enaium.People") as? InterfaceNode)?.members?.find { it.name == "profile" }?.type as? ClassTypeNode)?.also {
+                assertEquals("cn.enaium.Profile", it.qualifiedName)
+                assertTrue(it.nullable)
+            })
+            assertNotNull((index.findClass("cn.enaium.People") as? InterfaceNode)?.members?.find { it.name == "posts" }?.annotations?.find { it.qualifiedName == "org.babyfish.jimmer.sql.OneToMany" })
             assertNotNull((index.findClass("cn.enaium.Post") as? InterfaceNode)?.members?.find { it.name == "people" }?.annotations?.find { it.qualifiedName == "org.babyfish.jimmer.sql.ManyToOne" })
+            assertNotNull((index.findClass("cn.enaium.Post") as? InterfaceNode)?.members?.find { it.name == "topics" }?.annotations?.find { it.qualifiedName == "org.babyfish.jimmer.sql.ManyToMany" })
+            assertNotNull(((index.findClass("cn.enaium.Post") as? InterfaceNode)?.members?.find { it.name == "topics" }?.type as? ClassTypeNode)?.also {
+                assertEquals("java.util.List", it.qualifiedName)
+                assertEquals("cn.enaium.Topic", (it.arguments.first() as? ClassTypeNode)?.qualifiedName)
+            })
+
             val changeFile = srcDir / "cn/enaium/Answer.java"
             changeFile.also {
                 val origin = it.readText()

@@ -30,6 +30,7 @@ import org.eclipse.lsp4j.services.LanguageServer
 import org.eclipse.lsp4j.services.TextDocumentService
 import org.eclipse.lsp4j.services.WorkspaceService
 import java.net.URI
+import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import kotlin.io.path.*
 
@@ -46,12 +47,53 @@ class BuddyServer : LanguageServer {
                 project.environment.directories.add(URI.create(it.uri).toPath())
             }
 
-            process("Sync project") {
-                project.process()
-            }
+            CoroutineScope(Dispatchers.Default).launch {
+                process("Sync project") {
+                    project.process()
+                    client?.registerCapability(
+                        RegistrationParams(
+                            listOf(
+                                Registration(
+                                    UUID.randomUUID().toString(),
+                                    "textDocument/semanticTokens",
+                                    SemanticTokensWithRegistrationOptions().apply {
+                                        legend = SemanticTokensLegend().apply {
+                                            tokenTypes = SemanticType.entries.map { it.type }
+                                        }
+                                        setFull(true)
+                                    }
+                                ),
+                                Registration(
+                                    UUID.randomUUID().toString(),
+                                    "textDocument/foldingRange",
+                                    FoldingRangeProviderOptions()
+                                ),
+                                Registration(
+                                    UUID.randomUUID().toString(),
+                                    "textDocument/completion",
+                                    CompletionOptions().apply {
+                                        triggerCharacters = listOf("*", "@", "#")
+                                        completionItem = CompletionItemOptions().apply {
+                                            labelDetailsSupport = true
+                                        }
+                                    }
+                                ),
+                                Registration(
+                                    UUID.randomUUID().toString(),
+                                    "textDocument/formatting",
+                                    DocumentFormattingRegistrationOptions()
+                                ),
+                                Registration(
+                                    UUID.randomUUID().toString(),
+                                    "textDocument/hover",
+                                    HoverRegistrationOptions()
+                                )
+                            )
+                        )
+                    )
+                }
 
-            process("Gen source and dto") {
-                CoroutineScope(Dispatchers.Default).launch {
+                process("Gen source and dto") {
                     project.environment.modules.forEach { module ->
                         module.sourceDirectories.forEach { sourceDir ->
                             val sourceDirectory = sourceDir.relativeTo(module.directory)
@@ -59,7 +101,8 @@ class BuddyServer : LanguageServer {
                             val main = sourceDirectory.subpath(1, 2).name
                             val language = sourceDirectory.subpath(2, 3).name
                             val classes =
-                                project.environment.findClasses(sourceDir).toSet().takeIf { it.isNotEmpty() } ?: return@forEach
+                                project.environment.findClasses(sourceDir).toSet().takeIf { it.isNotEmpty() }
+                                    ?: return@forEach
                             if (project.environment.isKotlinProject) {
                                 val kspGen = KspGen(
                                     module.directory,
@@ -94,21 +137,6 @@ class BuddyServer : LanguageServer {
                         includeText = true
                     })
                 })
-                semanticTokensProvider = SemanticTokensWithRegistrationOptions().apply {
-                    legend = SemanticTokensLegend().apply {
-                        tokenTypes = SemanticType.entries.map { it.type }
-                    }
-                    setFull(true)
-                }
-                setFoldingRangeProvider(true)
-                completionProvider = CompletionOptions().apply {
-                    triggerCharacters = listOf("*", "@", "#")
-                    completionItem = CompletionItemOptions().apply {
-                        labelDetailsSupport = true
-                    }
-                }
-                setDocumentFormattingProvider(true)
-                setHoverProvider(true)
             })
         }
     }

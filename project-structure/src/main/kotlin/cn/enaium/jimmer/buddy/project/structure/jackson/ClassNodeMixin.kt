@@ -27,7 +27,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo
 @JsonSubTypes(
     value = [
         JsonSubTypes.Type(AnnotationClassNode::class),
-        JsonSubTypes.Type(ClassClassNode::class),
+        JsonSubTypes.Type(ClassNode::class),
         JsonSubTypes.Type(DataClassNode::class),
         JsonSubTypes.Type(EnumClassNode::class),
         JsonSubTypes.Type(InterfaceNode::class),

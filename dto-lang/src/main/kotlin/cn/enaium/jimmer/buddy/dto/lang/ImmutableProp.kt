@@ -114,8 +114,8 @@ data class ImmutableProp(
     }
 
     private fun isAssignableFrom(
-        classNode1: ClassNode,
-        classNode2: ClassNode
+        classNode1: BaseClassNode,
+        classNode2: BaseClassNode
     ): Boolean {
         if (classNode1 == classNode2) {
             return true

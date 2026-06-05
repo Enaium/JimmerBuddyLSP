@@ -21,7 +21,7 @@ import cn.enaium.jimmer.buddy.lang.parser.entity.classNode
 import cn.enaium.jimmer.buddy.lang.parser.entity.path
 import cn.enaium.jimmer.buddy.lang.parser.entity.qualifiedName
 import cn.enaium.jimmer.buddy.lang.parser.index.ClassIndex
-import cn.enaium.jimmer.buddy.lang.parser.node.ClassNode
+import cn.enaium.jimmer.buddy.lang.parser.node.BaseClassNode
 import cn.enaium.jimmer.buddy.project.structure.db.sql
 import org.babyfish.jimmer.sql.kt.ast.expression.eq
 import org.babyfish.jimmer.sql.kt.ast.expression.ilike
@@ -34,21 +34,21 @@ import kotlin.io.path.absolutePathString
 class ClassIndexImpl(val path: Path) : ClassIndex {
     private val sql = sql(path)
 
-    override fun findClass(qualifiedName: String): ClassNode? {
+    override fun findClass(qualifiedName: String): BaseClassNode? {
         return sql.createQuery(ClassEntity::class) {
             where(table.qualifiedName eq qualifiedName)
             select(table.classNode)
         }.fetchOneOrNull()
     }
 
-    override fun findClasses(directory: Path): List<ClassNode> {
+    override fun findClasses(directory: Path): List<BaseClassNode> {
         return sql.createQuery(ClassEntity::class) {
             where(table.path.ilike("${directory.absolutePathString()}%"))
             select(table.classNode)
         }.execute()
     }
 
-    override fun upsertClass(qualifiedName: String, classNode: ClassNode) {
+    override fun upsertClass(qualifiedName: String, classNode: BaseClassNode) {
         sql.save(ClassEntity {
             this.qualifiedName = qualifiedName
             this.classNode = classNode

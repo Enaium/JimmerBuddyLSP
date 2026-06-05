@@ -16,22 +16,38 @@
 
 package cn.enaium.jimmer.buddy.lang.parser.processor
 
-import JavaLexer
-import JavaParser
 import cn.enaium.jimmer.buddy.lang.parser.index.ClassIndex
-import cn.enaium.jimmer.buddy.lang.parser.node.*
+import cn.enaium.jimmer.buddy.lang.parser.node.AnnotationArgumentNode
+import cn.enaium.jimmer.buddy.lang.parser.node.AnnotationClassNode
+import cn.enaium.jimmer.buddy.lang.parser.node.AnnotationEntryNode
+import cn.enaium.jimmer.buddy.lang.parser.node.ClassNode
+import cn.enaium.jimmer.buddy.lang.parser.node.ClassTypeNode
+import cn.enaium.jimmer.buddy.lang.parser.node.EnumClassNode
+import cn.enaium.jimmer.buddy.lang.parser.node.EnumEntryNode
+import cn.enaium.jimmer.buddy.lang.parser.node.InterfaceNode
+import cn.enaium.jimmer.buddy.lang.parser.node.MethodNode
+import cn.enaium.jimmer.buddy.lang.parser.node.PrimitiveTypeNode
+import cn.enaium.jimmer.buddy.lang.parser.node.TypeNode
+import cn.enaium.jimmer.buddy.lang.parser.utility.field
+import cn.enaium.jimmer.buddy.lang.parser.utility.text
+import cn.enaium.jimmer.buddy.lang.parser.utility.types
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
-import org.antlr.v4.runtime.CharStreams
-import org.antlr.v4.runtime.CommonTokenStream
+import org.treesitter.TSNode
+import org.treesitter.TSParser
+import org.treesitter.TSQuery
+import org.treesitter.TSQueryCursor
+import org.treesitter.TSQueryMatch
+import org.treesitter.TreeSitterJava
 import java.nio.file.Path
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.jar.JarFile
 import java.util.zip.ZipFile
 import kotlin.io.path.*
+
 
 /**
  * @author Enaium
@@ -49,8 +65,6 @@ class JavaSourceProcessor(val sourceDirOrJar: Set<Path>, private val classIndex:
         parseFiles()
         return@coroutineScope classIndex
     }
-
-    // ======================== Scan Phase (regex-based, lightweight) ========================
 
     private suspend fun scanSource() = coroutineScope {
         sourceDirOrJar.mapNotNull { entry ->
@@ -133,8 +147,6 @@ class JavaSourceProcessor(val sourceDirOrJar: Set<Path>, private val classIndex:
         return typeNames.map { "$pkg.$it" }
     }
 
-    // ======================== Parse Phase (full ANTLR4, immediate indexing) ========================
-
     private suspend fun parseFiles() = coroutineScope {
         fileEntries.map { entry ->
             launch(Dispatchers.Default) {
@@ -144,206 +156,220 @@ class JavaSourceProcessor(val sourceDirOrJar: Set<Path>, private val classIndex:
     }
 
     private fun parseAndIndex(content: String, path: Path) {
-        val javaLexer = JavaLexer(CharStreams.fromString(content))
-        val javaParser = JavaParser(CommonTokenStream(javaLexer))
-        javaParser.errorListeners.clear()
-        val compilationUnit = javaParser.compilationUnit()
+        val parser = TSParser()
+        val language = TreeSitterJava()
+        parser.setLanguage(language)
+        val parse = parser.parseString(null, content)
+        val query = TSQuery(
+            language, """(package_declaration) @package
+            |(import_declaration)  @import
+            |(class_declaration) @class
+            |(interface_declaration) @interface
+            |(enum_declaration) @enum
+            |(annotation_type_declaration) @annotation
+        """.trimMargin()
+        )
+        val cursor = TSQueryCursor()
+        cursor.exec(query, parse.rootNode)
+        val match = TSQueryMatch()
 
-        val pkg = compilationUnit.packageDeclaration()?.qualifiedName()?.text ?: ""
-        val imports = compilationUnit.importDeclaration().map { importDeclaration ->
-            importDeclaration.qualifiedName().text.let { qualifiedName ->
-                importDeclaration.MUL()?.let { "$qualifiedName.*" } ?: qualifiedName
+
+        var pkg = ""
+        val imports = mutableSetOf<String>()
+
+        while (cursor.nextMatch(match)) {
+            match.captures.forEach { capture ->
+                val captureName = query.getCaptureNameForId(capture.index)
+                when (captureName) {
+                    "package" -> {
+                        pkg =
+                            capture.node.types("identifier", "scoped_identifier").mapNotNull { it.text(content) }.firstOrNull()
+                                ?: ""
+                    }
+
+                    "import" -> {
+                        capture.node.types("identifier", "scoped_identifier").mapNotNull { it.text(content) }.firstOrNull()
+                            ?.let { name ->
+                                imports.add(
+                                    if (capture.node.types("asterisk").isNotEmpty()) {
+                                        "$name.*"
+                                    } else {
+                                        name
+                                    }
+                                )
+                            }
+                    }
+
+                    "class", "interface", "enum", "annotation" -> {
+                        val name = capture.node.field("name")?.text(content) ?: return@forEach
+                        val qualifiedName = "$pkg.$name"
+                        val annotations = capture.node.types("modifiers").firstOrNull()
+                            ?.types("marker_annotation", "annotation")
+                            ?.mapNotNull { it.asAnnotationEntryNode(content, pkg, imports) }
+                            ?.toSet() ?: emptySet()
+
+                        when (captureName) {
+                            "class" -> {
+                                classIndex.upsertClass(
+                                    qualifiedName,
+                                    ClassNode(qualifiedName, path, annotations)
+                                )
+                            }
+
+                            "interface" -> {
+                                val supers = capture.node.types("extends_interfaces")
+                                    .flatMap { it.types("type_list") }
+                                    .flatMap { tl ->
+                                        (0 until tl.childCount).mapNotNull { i ->
+                                            tl.getChild(i).asTypeNode(content, pkg, imports)
+                                        }
+                                    }.toSet()
+
+                                val methods = capture.node.field("body")?.types("method_declaration")
+                                    ?.mapNotNull { it.asMethodNode(content, pkg, imports, qualifiedName) }
+                                    ?.toSet() ?: emptySet()
+
+                                classIndex.upsertClass(
+                                    qualifiedName,
+                                    InterfaceNode(
+                                        qualifiedName, path, annotations,
+                                        supers = supers, members = methods
+                                    )
+                                )
+                            }
+
+                            "enum" -> {
+                                val entries = capture.node.field("body")?.types("enum_constant")
+                                    ?.mapNotNull {
+                                        it.field("name")?.text(content)?.let { name -> EnumEntryNode(name) }
+                                    }?.toSet() ?: emptySet()
+
+                                classIndex.upsertClass(
+                                    qualifiedName,
+                                    EnumClassNode(qualifiedName, path, annotations, entries)
+                                )
+                            }
+
+                            "annotation" -> {
+                                classIndex.upsertClass(
+                                    qualifiedName,
+                                    AnnotationClassNode(qualifiedName, path, annotations)
+                                )
+                            }
+                        }
+                    }
+                }
             }
-        }.toSet()
-
-        val typeDeclarations = compilationUnit.typeDeclaration()
-        compilationUnit.children?.clear()
-
-        typeDeclarations.forEach { typeDeclaration ->
-            val annotations = typeDeclaration.classOrInterfaceModifier()
-                ?.mapNotNull { it.annotation()?.asAnnotationEntryNode(pkg, imports) }?.toSet() ?: emptySet()
-
-            typeDeclaration.classDeclaration()?.also { classDeclarationContext ->
-                val name = classDeclarationContext.identifier().text ?: return@forEach
-                classIndex.upsertClass(
-                    "$pkg.$name", ClassClassNode("$pkg.$name", path, annotations = annotations)
-                )
-            }
-
-            typeDeclaration.interfaceDeclaration()?.also { interfaceDeclarationContext ->
-                val name = interfaceDeclarationContext.identifier().text ?: return@forEach
-                val supers = interfaceDeclarationContext.typeList()
-                    ?.flatMap { it.typeType().map { it.asTypeNode(pkg, imports) } }
-                    ?.toSet() ?: emptySet()
-
-                val methods = interfaceDeclarationContext.interfaceBody()?.interfaceBodyDeclaration()
-                    ?.mapNotNull { bodyDeclarationContext ->
-                        return@mapNotNull bodyDeclarationContext.asMethodNode("$pkg.$name", pkg, imports)
-                    }?.toSet() ?: emptySet()
-                classIndex.upsertClass(
-                    "$pkg.$name",
-                    InterfaceNode("$pkg.$name", path, annotations, supers = supers, members = methods)
-                )
-            }
-
-            typeDeclaration.enumDeclaration()?.also { enumDeclarationContext ->
-                val name = enumDeclarationContext.identifier().text ?: return@forEach
-                classIndex.upsertClass(
-                    "$pkg.$name",
-                    EnumClassNode(
-                        "$pkg.$name",
-                        path,
-                        annotations,
-                        entries = enumDeclarationContext.enumConstants()?.enumConstant()
-                            ?.map { EnumEntryNode(it.identifier().text) }?.toSet() ?: emptySet()
-                    )
-                )
-            }
-
-            typeDeclaration.annotationTypeDeclaration()?.also { annotationTypeDeclarationContext ->
-                val name = annotationTypeDeclarationContext.identifier().text ?: return@forEach
-                classIndex.upsertClass("$pkg.$name", AnnotationClassNode("$pkg.$name", path, annotations))
-            }
-
-            typeDeclaration.children?.clear()
         }
     }
 
-    // ======================== Helper methods (unchanged semantics) ========================
-
-    private fun JavaParser.InterfaceBodyDeclarationContext.asMethodNode(
-        className: String,
+    fun TSNode.asMethodNode(
+        content: String,
         pkg: String,
-        imports: Set<String>
+        imports: Set<String>,
+        classQualifiedName: String
     ): MethodNode? {
-        val interfaceMethodDeclaration =
-            this.interfaceMemberDeclaration()?.interfaceMethodDeclaration()
-                ?: return null
-        val interfaceCommonBodyDeclaration =
-            interfaceMethodDeclaration.interfaceCommonBodyDeclaration()
-                ?: return null
-
-        val name = interfaceCommonBodyDeclaration.identifier().text ?: return null
-        val asTypeNode = interfaceCommonBodyDeclaration.typeTypeOrVoid()
-            .asTypeNode(pkg, imports)
-
-        val annotations = this.modifier()?.mapNotNull {
-            it.classOrInterfaceModifier()?.annotation()?.asAnnotationEntryNode(pkg, imports)
-        }?.toSet() ?: emptySet()
-
+        val name = this.field("name")?.text(content) ?: return null
+        val type = this.field("type")?.asTypeNode(content, pkg, imports) ?: return null
+        val annotations = this.types("modifiers").firstOrNull()
+            ?.types("marker_annotation", "annotation")
+            ?.mapNotNull { it.asAnnotationEntryNode(content, pkg, imports) }
+            ?.toSet() ?: emptySet()
+        val nullable = annotations.any { it.name == "Nullable" || (it.qualifiedName?.endsWith(".Nullable") == true) }
+        val effectiveType = if (nullable && type is ClassTypeNode) {
+            ClassTypeNode(type.name, type.qualifiedName, nullable = true, array = type.array, arguments = type.arguments)
+        } else type
+        val isDefault = this.types("modifiers").firstOrNull()
+            ?.types("default")?.isNotEmpty() == true
         return MethodNode(
-            className,
-            name,
-            annotations,
-            asTypeNode,
-            interfaceMethodDeclaration.interfaceMethodModifier().any { it.DEFAULT() != null })
+            className = classQualifiedName, name, type = effectiveType,
+            annotations = annotations, default = isDefault
+        )
     }
 
-    private fun JavaParser.TypeTypeOrVoidContext.asTypeNode(pkg: String, imports: Set<String>): TypeNode {
-        this.typeType()?.asTypeNode(pkg, imports)?.also {
-            return it
-        }
-        return TypeNode(this.text, false)
-    }
-
-    private fun JavaParser.TypeTypeContext.asTypeNode(pkg: String, imports: Set<String>): TypeNode {
-        val array = this.LBRACK().isNotEmpty() && this.RBRACK().isNotEmpty()
-        this.primitiveType()?.also { primitive ->
-            return PrimitiveTypeNode(primitive.text, array)
-        } ?: this.classOrInterfaceType()?.classType()?.also { classType ->
-            val name = classType.typeIdentifier().firstOrNull()
-                ?.let { id ->
-                    classType.packageName()?.firstOrNull()?.let { pkg -> "${id.text}.${pkg.text}" } ?: id.text
-                } ?: return@also
-            val qualifiedName =
-                findQualifiedName(pkg, imports, name)
-
-            val arguments = classType.typeArguments().firstOrNull()?.typeArgument()
-                ?.mapNotNull { it.typeType()?.asTypeNode(pkg, imports) ?: it.QUESTION()?.let { WildcardTypeNode() } }
-                ?.toSet() ?: emptySet()
-
-            return ClassTypeNode(classType.text, qualifiedName, array, false, arguments)
-        }
-        return TypeNode(this.text, array)
-    }
-
-    private fun JavaParser.AnnotationContext.asAnnotationEntryNode(
-        pkg: String,
-        imports: Set<String>
-    ): AnnotationEntryNode {
-        val name = this.qualifiedName().text
-        val qualifiedName = findQualifiedName(pkg, imports, name)
-
-        val arguments =
-            this.annotationFieldValues()?.annotationFieldValue()
-                ?.mapNotNull { it.asAnnotationArgumentNode(pkg, imports) }
-                ?.toSet() ?: emptySet()
-
-        return AnnotationEntryNode(name, qualifiedName, arguments)
-    }
-
-    private fun JavaParser.AnnotationFieldValueContext.asAnnotationArgumentNode(
-        pkg: String,
-        imports: Set<String>
-    ): AnnotationArgumentNode? {
-        this.annotationValue()?.also { annotationValue ->
-            annotationValue.expression()?.also { expression ->
-                when (expression) {
-                    // named argument
-                    is JavaParser.BinaryOperatorExpressionContext -> {
-                        val name =
-                            (expression.expression().getOrNull(0) as? JavaParser.PrimaryExpressionContext)?.primary()
-                                ?.identifier()?.text ?: return@also
-                        val valueExpression =
-                            (expression.expression().getOrNull(1) as? JavaParser.PrimaryExpressionContext)?.primary()
-                                ?: return@also
-                        return AnnotationArgumentNode(name, valueExpression)
-                    }
-
-                    // unnamed argument
-                    is JavaParser.PrimaryExpressionContext -> {
-                        val valueExpression = expression.primary() ?: return@also
-                        return AnnotationArgumentNode("value", valueExpression.asAny(pkg, imports))
-                    }
-                }
+    fun TSNode.asTypeNode(content: String, pkg: String, imports: Set<String>, array: Boolean = false): TypeNode? {
+        when (this.type) {
+            "array_type" -> {
+                return this.field("element")?.asTypeNode(content, pkg, imports, array = true)
             }
 
-            // array
-            val values = annotationValue.annotationValue()
-                .mapNotNull {
-                    (it.expression() as? JavaParser.PrimaryExpressionContext)?.primary()?.asAny(pkg, imports)
-                }
+            "integral_type" -> {
+                val t = this.text(content) ?: return null
+                return PrimitiveTypeNode(t, array = array)
+            }
 
-            return AnnotationArgumentNode(this.identifier()?.text ?: "value", values)
+            "floating_point_type" -> {
+                val t = this.text(content) ?: return null
+                return PrimitiveTypeNode(t, array = array)
+            }
+
+            "boolean_type" -> {
+                return PrimitiveTypeNode("boolean", array = array)
+            }
+
+            "void_type" -> {
+                return TypeNode("void", false)
+            }
+
+            "identifier", "scoped_type_identifier", "type_identifier" -> {
+                val name = this.text(content) ?: return null
+                return ClassTypeNode(name, findQualifiedName(pkg, imports, name))
+            }
+
+            "generic_type" -> {
+                val name = this.types("type_identifier").firstOrNull()?.text(content) ?: return null
+                val arguments = mutableSetOf<TypeNode>()
+                this.types("type_arguments").firstOrNull()?.let { typeArgs ->
+                    for (i in 0 until typeArgs.childCount) {
+                        val child = typeArgs.getChild(i)
+                        child.asTypeNode(content, pkg, imports)?.let { arguments.add(it) }
+                    }
+                }
+                return ClassTypeNode(
+                    name, findQualifiedName(pkg, imports, name), array = array, arguments = arguments
+                )
+            }
         }
         return null
     }
 
-    private fun JavaParser.PrimaryContext.asAny(
-        pkg: String,
-        imports: Set<String>
-    ): Any? {
-        this.literal()?.also { literal ->
-            literal.CHAR_LITERAL()?.also {
-                return it.text.substringAfter("'").substringBeforeLast("'")
+    fun TSNode.asAnnotationEntryNode(content: String, pkg: String, imports: Set<String>): AnnotationEntryNode? {
+        val name = this.field("name")?.text(content) ?: return null
+        val arguments = this.field("arguments")?.types("element_value_pair")
+            ?.mapNotNull { it.asAnnotationArgumentNode(content, pkg, imports) }?.toSet() ?: emptySet()
+        return AnnotationEntryNode(name, findQualifiedName(pkg, imports, name), arguments)
+    }
+
+    fun TSNode.asAnnotationArgumentNode(content: String, pkg: String, imports: Set<String>): AnnotationArgumentNode? {
+        val key = this.field("key")?.text(content) ?: return null
+        val value = this.field("value")?.asAnnotationValue(content)
+        return AnnotationArgumentNode(key, value)
+    }
+
+    private fun TSNode.asAnnotationValue(content: String): Any? {
+        return when (this.type) {
+            "string_literal" -> this.text(content)?.substringAfter('"')?.substringBeforeLast('"')
+            "char_literal" -> this.text(content)?.substringAfter('\'')?.substringBeforeLast('\'')
+            "decimal_integer_literal" -> this.text(content)?.toIntOrNull()
+            "decimal_floating_point_literal" -> this.text(content)?.toFloatOrNull()
+            "hex_integer_literal" -> this.text(content)?.removePrefix("0x")?.removePrefix("0X")?.removeSuffix("L")
+                ?.toIntOrNull(16)
+
+            "octal_integer_literal" -> this.text(content)?.removePrefix("0")?.toIntOrNull(8)
+            "binary_integer_literal" -> this.text(content)?.removePrefix("0b")?.removePrefix("0B")?.toIntOrNull(2)
+            "true" -> true
+            "false" -> false
+            "null_literal" -> null
+            "identifier" -> this.text(content)
+            "scoped_identifier" -> this.text(content)
+            "element_value_array_initializer" -> {
+                (0 until this.childCount).mapNotNull { i ->
+                    this.getChild(i).asAnnotationValue(content)
+                }
             }
-            literal.STRING_LITERAL()?.also {
-                return it.text.substringAfter('"').substringBeforeLast('"')
-            }
-            literal.BOOL_LITERAL()?.also {
-                return it.text.toBoolean()
-            }
-            literal.floatLiteral()?.also {
-                return it.text.toFloat()
-            }
-            literal.integerLiteral()?.also {
-                return it.text.toInt()
-            }
+
+            else -> this.text(content)
         }
-        this.typeTypeOrVoid()?.asTypeNode(pkg, imports)?.also {
-            return it
-        }
-        return null
     }
 
     /**

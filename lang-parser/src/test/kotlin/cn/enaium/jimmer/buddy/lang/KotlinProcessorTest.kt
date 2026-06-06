@@ -23,6 +23,7 @@ import cn.enaium.jimmer.buddy.lang.parser.node.MethodNode
 import cn.enaium.jimmer.buddy.lang.parser.processor.KotlinSourceProcessor
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertIterableEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -97,6 +98,10 @@ class KotlinProcessorTest {
                 assertEquals("kotlin.collections.List", it.qualifiedName)
                 assertEquals("cn.enaium.Topic", (it.arguments.first() as? ClassTypeNode)?.qualifiedName)
             })
+            assertNotNull((index.findClass("cn.enaium.Profile") as? InterfaceNode)?.members?.find { it.name == "fullName" }?.annotations?.find { it.qualifiedName == "org.babyfish.jimmer.sql.Formula" }?.arguments?.find { it.name == "dependencies" }
+                ?.also {
+                    assertIterableEquals(listOf("firstName", "lastName"), it.value as Iterable<String>)
+                })
             val changeFile = srcDir / "cn/enaium/Answer.kt"
             changeFile.also {
                 val origin = it.readText()

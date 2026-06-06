@@ -94,6 +94,11 @@ class BuddyServer : LanguageServer {
                                     CodeLensOptions().apply {
                                         resolveProvider = true
                                     }
+                                ),
+                                Registration(
+                                    UUID.randomUUID().toString(),
+                                    "textDocument/definition",
+                                    DefinitionOptions()
                                 )
                             )
                         )
@@ -121,7 +126,7 @@ class BuddyServer : LanguageServer {
                                     emptyMap()
                                 )
                                 kspGen.sourceProcess(classes)
-                                kspGen.dtoProcess((sourceDir.parent / "dto").walk().filter { it.extension == "dto" }
+                                kspGen.dtoPathProcess((sourceDir.parent / "dto").walk().filter { it.extension == "dto" }
                                     .toSet())
                             } else if (project.environment.isJavaProject) {
                                 val aptGen = AptGen(
@@ -131,7 +136,7 @@ class BuddyServer : LanguageServer {
                                     emptyMap()
                                 )
                                 aptGen.sourceProcess(classes)
-                                aptGen.dtoProcess((sourceDir.parent / "dto").walk().filter { it.extension == "dto" }
+                                aptGen.dtoPathProcess((sourceDir.parent / "dto").walk().filter { it.extension == "dto" }
                                     .toSet())
                             }
                         }

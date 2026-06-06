@@ -2,6 +2,7 @@ package cn.enaium;
 
 import java.lang.String;
 import java.util.UUID;
+import org.babyfish.jimmer.sql.Formula;
 import org.babyfish.jimmer.sql.Entity;
 import org.babyfish.jimmer.sql.IdView;
 import org.babyfish.jimmer.sql.OneToOne;
@@ -11,7 +12,14 @@ public interface Profile extends BaseEntity {
     @IdView
     UUID peopleId();
 
-    String nickname();
+    String firstName();
+
+    String lastName();
+
+    @Formula(dependencies = {"firstName", "lastName"})
+    default String fullName() {
+        return firstName() + ' ' + lastName();
+    }
 
     String email();
 

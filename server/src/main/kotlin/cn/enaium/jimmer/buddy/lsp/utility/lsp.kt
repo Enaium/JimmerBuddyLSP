@@ -44,6 +44,19 @@ fun Token.position(textLength: Boolean = false): Position {
     return Position(line - 1, charPositionInLine.let { if (textLength) it + text.length else it })
 }
 
+fun Range.overlaps(position: Position): Boolean {
+    return if (start.line == position.line && end.line == position.line) {
+        start.character <= position.character && end.character >= position.character
+    } else if (start.line == position.line) {
+        start.character <= position.character
+    } else if (end.line == position.line) {
+        end.character >= position.character
+    } else {
+        start.line <= position.line && end.line >= position.line
+    }
+}
+
+
 fun ParserRuleContext.range(): Range {
     return Range(this.start.position(), this.stop.position())
 }

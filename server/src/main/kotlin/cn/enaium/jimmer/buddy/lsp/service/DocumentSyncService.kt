@@ -81,7 +81,8 @@ abstract class DocumentSyncService(val project: Project, val documentManager: Do
 
     fun getGenDirectory(path: Path): Path? {
         val module =
-            project.environment.modules.find { path.startsWith(it.directory) } ?: return null
+            project.environment.modules.sortedByDescending { it.directory.nameCount }.find { path.startsWith(it.directory) }
+                ?: return null
         val sourceDirectory =
             module.sourceDirectories.find { path.startsWith(it.parent) }?.relativeTo(module.directory)
                 ?: return null

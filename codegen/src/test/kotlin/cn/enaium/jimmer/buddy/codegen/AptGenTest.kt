@@ -51,7 +51,7 @@ class AptGenTest {
                 emptyMap()
             ).sourceProcess(process.values.filter { it.path.parent.isDirectory() }.toSet())
             assertEquals(41, sourceDir.walk().count())
-            AptGen(projectDir, process, dtoDir, emptyMap()).dtoProcess((projectDir / "src/main/dto").walk().toSet())
+            AptGen(projectDir, process, dtoDir, emptyMap()).dtoPathProcess((projectDir / "src/main/dto").walk().toSet())
             assertEquals(1, dtoDir.walk().count())
             genDir.deleteRecursively()
         }

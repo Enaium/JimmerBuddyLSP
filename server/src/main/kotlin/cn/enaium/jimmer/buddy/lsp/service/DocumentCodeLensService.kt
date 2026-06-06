@@ -28,6 +28,7 @@ import org.eclipse.lsp4j.CodeLensParams
 import org.eclipse.lsp4j.Command
 import java.net.URI
 import java.util.concurrent.CompletableFuture
+import kotlin.collections.emptyList
 import kotlin.io.path.div
 import kotlin.io.path.exists
 import kotlin.io.path.listDirectoryEntries
@@ -39,14 +40,13 @@ import kotlin.io.path.toPath
  */
 class DocumentCodeLensService(val project: Project, val documentManager: DocumentManager) : DocumentServiceAdapter() {
     override fun codeLens(params: CodeLensParams): CompletableFuture<List<CodeLens>> {
-        val document = documentManager.getDocument(params.textDocument.uri) as? DtoDocument
-            ?: return CompletableFuture.completedFuture(
-                emptyList()
-            )
         return CoroutineScope(Dispatchers.Default).future {
             val codeLens = mutableListOf<CodeLens>()
+            val document = documentManager.getDocument(params.textDocument.uri) as? DtoDocument
+                ?: return@future codeLens
 
             val packageName = document.cst.exportStatement()?.packageParts()?.qualifiedName()?.text
+                ?: document.type?.packageName?.let { "$it.dto" }
                 ?: return@future codeLens
 
             val buildDirectory = project.environment.modules.find {
@@ -54,8 +54,9 @@ class DocumentCodeLensService(val project: Project, val documentManager: Documen
             }?.buildDirectory ?: return@future codeLens
 
             if (project.environment.isKotlinProject) {
-                document.cst.dtoType().forEach { dtoType ->
-                    (buildDirectory / "generated/ksp").listDirectoryEntries().forEach { entry ->
+
+                (buildDirectory / "generated/ksp").takeIf { it.exists() }?.listDirectoryEntries()?.forEach { entry ->
+                    document.cst.dtoType().forEach { dtoType ->
                         val generated = entry / "kotlin/${packageName.replace('.', '/')}/${dtoType.name.text}.kt"
                         if (generated.exists()) {
                             codeLens.add(
@@ -69,7 +70,8 @@ class DocumentCodeLensService(val project: Project, val documentManager: Documen
                     }
                 }
             } else if (project.environment.isJavaProject) {
-                (buildDirectory / "generated/sources/annotationProcessor/java").listDirectoryEntries().forEach { entry ->
+                (buildDirectory / "generated/sources/annotationProcessor/java").takeIf { it.exists() }
+                    ?.listDirectoryEntries()?.forEach { entry ->
                     document.cst.dtoType().forEach { dtoType ->
                         val generated = entry / "${packageName.replace('.', '/')}/${dtoType.name.text}.java"
                         if (generated.exists()) {

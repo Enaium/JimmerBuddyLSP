@@ -29,6 +29,7 @@ import org.babyfish.jimmer.apt.entry.EntryProcessor
 import org.babyfish.jimmer.apt.immutable.ImmutableProcessor
 import org.babyfish.jimmer.apt.immutable.meta.ImmutableType
 import org.babyfish.jimmer.apt.transactional.TxProcessor
+import org.babyfish.jimmer.dto.compiler.DtoFile
 import java.nio.file.Path
 import javax.annotation.processing.RoundEnvironment
 import javax.lang.model.element.TypeElement
@@ -83,7 +84,7 @@ class AptGen(
         System.gc()
     }
 
-    fun dtoProcess(files: Set<Path>, name: String? = null) {
+    fun dtoFileProcess(files: Set<DtoFile>, name: String? = null) {
         val (pe, rootElements, sources) = AptProcessor(environment).process(emptySet())
         val option = createAptOption(
             options,
@@ -94,9 +95,8 @@ class AptGen(
         val elements = pe.elementUtils
         files.forEach { file ->
             try {
-                val dtoFile = file.toDtoFile(projectDir)
                 val compiler =
-                    AptDtoCompiler(dtoFile, elements, option.defaultNullableInputModifier)
+                    AptDtoCompiler(file, elements, option.defaultNullableInputModifier)
                 val typeElement: TypeElement =
                     elements.getTypeElement(compiler.sourceTypeName) ?: return@forEach
                 val compile = compiler.compile(option.context.getImmutableType(typeElement))
@@ -118,5 +118,9 @@ class AptGen(
             }
         }
         System.gc()
+    }
+
+    fun dtoPathProcess(files: Set<Path>, name: String? = null) {
+        dtoFileProcess(files.map { it.toDtoFile(projectDir) }.toSet(), name)
     }
 }

@@ -19,7 +19,7 @@ package cn.enaium.jimmer.buddy.formatter
 /**
  * @author Enaium
  */
-class SpaceBuilder(val spaceToken: Int) {
+class SpaceBuilder(val spaceToken: Int, val blockCommentTokens: Set<Int> = emptySet()) {
 
     private val models = mutableListOf<Model>()
 

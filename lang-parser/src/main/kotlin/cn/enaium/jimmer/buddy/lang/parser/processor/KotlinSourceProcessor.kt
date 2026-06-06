@@ -277,7 +277,18 @@ class KotlinSourceProcessor(val sourceDirOrJar: Set<Path>, private val classInde
             ?.types("annotation")
             ?.mapNotNull { it.asAnnotationEntryNode(content, pkg, imports) }
             ?.toSet() ?: emptySet()
-        return PropertyNode(className, name, type, annotations)
+        // getter/setter are siblings of property_declaration, not children
+        var sibling = this.getNextSibling()
+        var hasGetter = false
+        var hasSetter = false
+        while (sibling != null && (sibling.type == "getter" || sibling.type == "setter")) {
+            when (sibling.type) {
+                "getter" -> hasGetter = true
+                "setter" -> hasSetter = true
+            }
+            sibling = sibling.getNextSibling()
+        }
+        return PropertyNode(className, name, type, annotations, getter = hasGetter, setter = hasSetter)
     }
 
     private fun TSNode.asTypeNode(content: String, pkg: String, imports: Set<String>): TypeNode? {
@@ -300,7 +311,13 @@ class KotlinSourceProcessor(val sourceDirOrJar: Set<Path>, private val classInde
             "nullable_type" -> {
                 val inner = this.types("user_type").firstOrNull()?.asTypeNode(content, pkg, imports) ?: return null
                 if (inner is ClassTypeNode) {
-                    ClassTypeNode(inner.name, inner.qualifiedName, nullable = true, array = inner.array, arguments = inner.arguments)
+                    ClassTypeNode(
+                        inner.name,
+                        inner.qualifiedName,
+                        nullable = true,
+                        array = inner.array,
+                        arguments = inner.arguments
+                    )
                 } else {
                     inner
                 }
@@ -350,7 +367,7 @@ class KotlinSourceProcessor(val sourceDirOrJar: Set<Path>, private val classInde
         val arguments = if (invocation != null) {
             invocation.types("value_arguments").firstOrNull()
                 ?.types("value_argument")
-                ?.mapNotNull { it.asAnnotationArgumentNode(content, pkg, imports) }
+                ?.map { it.asAnnotationArgumentNode(content, pkg, imports) }
                 ?.toSet() ?: emptySet()
         } else {
             emptySet()
@@ -362,9 +379,19 @@ class KotlinSourceProcessor(val sourceDirOrJar: Set<Path>, private val classInde
         content: String,
         pkg: String,
         imports: Set<String>
-    ): AnnotationArgumentNode? {
-        val key = this.types("simple_identifier").firstOrNull()?.text(content) ?: "value"
-        val value = this.asAnnotationValue(content)
+    ): AnnotationArgumentNode {
+        val key = if (this.namedChildCount == 1) {
+            "value"
+        } else {
+            this.getNamedChild(0)?.text(content) ?: "value"
+        }
+
+        val value = if (this.namedChildCount == 1) {
+            this.getNamedChild(0)?.asAnnotationValue(content)
+        } else {
+            this.getNamedChild(1)?.asAnnotationValue(content)
+        }
+
         return AnnotationArgumentNode(key, value)
     }
 
@@ -377,12 +404,11 @@ class KotlinSourceProcessor(val sourceDirOrJar: Set<Path>, private val classInde
             "simple_identifier" -> this.text(content)
             "scoped_identifier" -> this.text(content)
             "real_literal" -> this.text(content)?.toFloatOrNull()
+            "collection_literal" -> {
+                (0 until this.namedChildCount).map { this.getNamedChild(it).asAnnotationValue(content) }
+            }
+
             else -> {
-                // Check children for value types
-                for (i in 0 until this.childCount) {
-                    val child = this.getChild(i)
-                    child.asAnnotationValue(content)?.let { return it }
-                }
                 null
             }
         }
@@ -400,7 +426,7 @@ class KotlinSourceProcessor(val sourceDirOrJar: Set<Path>, private val classInde
             it in allQualifiedNames || classIndex.findClass(it) != null
         }?.also { return it }
         // The import is qualified name if its suffix is same the name
-        imports.find { it.endsWith(name) }?.also { return it }
+        imports.find { it.substringAfterLast(".") == name }?.also { return it }
         // Wildcard imports: expand each and check against known qualified names
         imports.filter { it.endsWith("*") }.forEach { import ->
             val qualifiedName = "${import.substringBeforeLast(".*")}.$name"

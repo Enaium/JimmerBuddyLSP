@@ -27,7 +27,8 @@ class KotlinDocumentSyncService(project: Project, documentManager: DocumentManag
                     val index = project.environment.getIndex()
                     KotlinSourceProcessor(setOf(path), index).process()
                     val module =
-                        project.environment.modules.find { path.startsWith(it.directory) } ?: return@schedule
+                        project.environment.modules.sortedByDescending { it.directory.nameCount }
+                            .find { path.startsWith(it.directory) } ?: return@schedule
                     val genDir = getGenDirectory(path) ?: return@schedule
                     val genClasses = index.findClasses(path.parent).filter { it.path == path }.toSet()
                     KspGen(

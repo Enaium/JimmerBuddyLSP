@@ -23,6 +23,7 @@ import cn.enaium.jimmer.buddy.dto.lang.Context
 import cn.enaium.jimmer.buddy.dto.lang.DocumentDtoCompiler
 import cn.enaium.jimmer.buddy.dto.lang.DtoLexer
 import cn.enaium.jimmer.buddy.dto.lang.DtoParser
+import cn.enaium.jimmer.buddy.dto.lang.DtoProcessor
 import cn.enaium.jimmer.buddy.dto.lang.ImmutableType
 import cn.enaium.jimmer.buddy.lsp.client
 import cn.enaium.jimmer.buddy.lsp.document.DocumentManager
@@ -32,10 +33,16 @@ import cn.enaium.jimmer.buddy.lsp.utility.findProjectDir
 import cn.enaium.jimmer.buddy.project.structure.Project
 import org.antlr.v4.runtime.*
 import org.babyfish.jimmer.dto.compiler.DtoAstException
+import org.babyfish.jimmer.dto.compiler.DtoFile
+import org.babyfish.jimmer.dto.compiler.OsFile
 import org.eclipse.lsp4j.*
 import org.eclipse.lsp4j.jsonrpc.messages.Either
+import java.io.Reader
 import java.net.URI
+import kotlin.io.path.absolutePathString
 import kotlin.io.path.extension
+import kotlin.io.path.name
+import kotlin.io.path.relativeTo
 import kotlin.io.path.toPath
 
 /**
@@ -102,16 +109,37 @@ class DtoDocumentSyncService(project: Project, documentManager: DocumentManager)
                         val module =
                             project.environment.modules.find { path.startsWith(it.directory) } ?: return@schedule
                         val genDir = getGenDirectory(path) ?: return@schedule
+
+                        val dtoFile = DtoFile(
+                            object : OsFile {
+                                override fun getAbsolutePath(): String {
+                                    return path.absolutePathString()
+                                }
+
+                                override fun openReader(): Reader {
+                                    return content.reader()
+                                }
+                            },
+                            module.directory.name,
+                            path.parent.relativeTo(module.directory).joinToString("/"),
+                            emptyList(),
+                            path.name
+                        )
+
                         when {
                             project.environment.isKotlinProject -> {
-                                KspGen(module.directory, project.environment, genDir, emptyMap()).dtoProcess(
-                                    setOf(path)
+                                KspGen(module.directory, project.environment, genDir, emptyMap()).dtoFileProcess(
+                                    setOf(
+                                        dtoFile
+                                    )
                                 )
                             }
 
                             project.environment.isJavaProject -> {
-                                AptGen(module.directory, project.environment, genDir, emptyMap()).dtoProcess(
-                                    setOf(path)
+                                AptGen(module.directory, project.environment, genDir, emptyMap()).dtoFileProcess(
+                                    setOf(
+                                        dtoFile
+                                    )
                                 )
                             }
                         }

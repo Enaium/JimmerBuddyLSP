@@ -183,12 +183,14 @@ class JavaSourceProcessor(val sourceDirOrJar: Set<Path>, private val classIndex:
                 when (captureName) {
                     "package" -> {
                         pkg =
-                            capture.node.types("identifier", "scoped_identifier").mapNotNull { it.text(content) }.firstOrNull()
+                            capture.node.types("identifier", "scoped_identifier").mapNotNull { it.text(content) }
+                                .firstOrNull()
                                 ?: ""
                     }
 
                     "import" -> {
-                        capture.node.types("identifier", "scoped_identifier").mapNotNull { it.text(content) }.firstOrNull()
+                        capture.node.types("identifier", "scoped_identifier").mapNotNull { it.text(content) }
+                            .firstOrNull()
                             ?.let { name ->
                                 imports.add(
                                     if (capture.node.types("asterisk").isNotEmpty()) {
@@ -277,7 +279,13 @@ class JavaSourceProcessor(val sourceDirOrJar: Set<Path>, private val classIndex:
             ?.toSet() ?: emptySet()
         val nullable = annotations.any { it.name == "Nullable" || (it.qualifiedName?.endsWith(".Nullable") == true) }
         val effectiveType = if (nullable && type is ClassTypeNode) {
-            ClassTypeNode(type.name, type.qualifiedName, nullable = true, array = type.array, arguments = type.arguments)
+            ClassTypeNode(
+                type.name,
+                type.qualifiedName,
+                nullable = true,
+                array = type.array,
+                arguments = type.arguments
+            )
         } else type
         val isDefault = this.types("modifiers").firstOrNull()
             ?.types("default")?.isNotEmpty() == true
@@ -363,8 +371,8 @@ class JavaSourceProcessor(val sourceDirOrJar: Set<Path>, private val classIndex:
             "identifier" -> this.text(content)
             "scoped_identifier" -> this.text(content)
             "element_value_array_initializer" -> {
-                (0 until this.childCount).mapNotNull { i ->
-                    this.getChild(i).asAnnotationValue(content)
+                (0 until this.namedChildCount).map { i ->
+                    this.getNamedChild(i).asAnnotationValue(content)
                 }
             }
 
@@ -382,7 +390,7 @@ class JavaSourceProcessor(val sourceDirOrJar: Set<Path>, private val classIndex:
         // The package name and the name are a qualified name if it is known.
         "$pkg.$name".takeIf { it in allQualifiedNames || classIndex.findClass(it) != null }?.also { return it }
         // The import is qualified name if its suffix is same the name
-        imports.find { it.endsWith(name) }?.also { return it }
+        imports.find { it.substringAfterLast(".") == name }?.also { return it }
         // Wildcard imports: expand each and check against known qualified names
         imports.filter { it.endsWith("*") }.forEach { import ->
             val qualifiedName = "${import.substringBeforeLast(".*")}.${name}"

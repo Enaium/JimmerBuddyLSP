@@ -55,7 +55,16 @@ class Formatter(private val tokens: List<Token>) {
         val text = result.filter { it.type != Token.EOF }.joinToString("") { it.text }
 
         return if (indentModels.isNotEmpty() && ruleInstances != null) {
-            applyIndentation(text, indentModels, ruleInstances)
+            val blockCommentLines = mutableSetOf<Int>()
+            for (token in snapshot) {
+                if (token.type in builder.blockCommentTokens) {
+                    // Continuation lines of a multi-line block comment
+                    for (line in token.line + 1..token.line + token.text.count { it == '\n' }) {
+                        blockCommentLines.add(line)
+                    }
+                }
+            }
+            applyIndentation(text, indentModels, ruleInstances, blockCommentLines)
         } else {
             text
         }
@@ -283,7 +292,8 @@ class Formatter(private val tokens: List<Token>) {
     private fun applyIndentation(
         text: String,
         indentModels: List<SpaceBuilder.Indent>,
-        ruleInstances: Map<Int, List<IntRange>>
+        ruleInstances: Map<Int, List<IntRange>>,
+        blockCommentLines: Set<Int> = emptySet()
     ): String {
         val blockLineRanges = indentModels.flatMap { model ->
             ruleInstances[model.ruleIndex].orEmpty().mapNotNull { instance ->
@@ -298,8 +308,15 @@ class Formatter(private val tokens: List<Token>) {
             val depth = blockLineRanges.count { (start, end) -> idx + 1 in (start + 1)..<end }
             if (depth > 0) {
                 val indent = " ".repeat(depth * 4)
-                val trimmed = line.trimStart()
-                if (trimmed.isNotEmpty()) indent + trimmed else ""
+                if (idx + 1 in blockCommentLines) {
+                    // Preserve block comment continuation line alignment
+                    val leadingSpaces = line.takeWhile { it == ' ' }.length
+                    val toRemove = minOf(leadingSpaces, depth * 4)
+                    indent + line.substring(toRemove)
+                } else {
+                    val trimmed = line.trimStart()
+                    if (trimmed.isNotEmpty()) indent + trimmed else ""
+                }
             } else {
                 line
             }

@@ -23,13 +23,10 @@ import cn.enaium.jimmer.buddy.formatter.SpaceBuilder
 import cn.enaium.jimmer.buddy.lsp.document.DocumentManager
 import cn.enaium.jimmer.buddy.lsp.document.DtoDocument
 import cn.enaium.jimmer.buddy.lsp.utility.position
-import org.antlr.v4.runtime.CharStreams
-import org.antlr.v4.runtime.CommonTokenStream
 import org.antlr.v4.runtime.ParserRuleContext
 import org.eclipse.lsp4j.DocumentFormattingParams
 import org.eclipse.lsp4j.Range
 import org.eclipse.lsp4j.TextEdit
-import org.eclipse.lsp4j.jsonrpc.messages.Either
 import java.net.URI
 import java.util.concurrent.CompletableFuture
 import kotlin.io.path.extension
@@ -65,7 +62,7 @@ class DocumentFormattingService(val documentManager: DocumentManager) : Document
         collectRuleInstances(cst)
 
         val formatted = Formatter(tokens).process(
-            SpaceBuilder(DtoLexer.WhiteSpace)
+            SpaceBuilder(DtoLexer.WhiteSpace, blockCommentTokens = setOf(DtoLexer.DocComment, DtoLexer.BlockComment))
                 .around(DtoLexer.DOT, 0)
                 .around(DtoLexer.COMMA, 0, 1)
                 .around(DtoLexer.COLON, 0, 1)
@@ -76,7 +73,7 @@ class DocumentFormattingService(val documentManager: DocumentManager) : Document
                 .around(DtoLexer.RIGHT_PARENTHESIS, 0)
                 .around(DtoLexer.AT, 0)
                 .around(DtoLexer.HASH, 0)
-                .around(DtoLexer.AS, 0)
+                .between(DtoLexer.RIGHT_PARENTHESIS, DtoLexer.AS, 1)
                 .between(DtoLexer.RIGHT_ARROW, DtoLexer.PACKAGE, 1)
                 .between(DtoLexer.AS, DtoLexer.LEFT_PARENTHESIS, 0)
                 .ruleAround(DtoParser.RULE_explicitProp, 0)

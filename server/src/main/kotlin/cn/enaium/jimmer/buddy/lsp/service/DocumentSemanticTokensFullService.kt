@@ -72,7 +72,8 @@ class DocumentSemanticTokensFullService(val documentManager: DocumentManager) : 
                 exportStatement.EXPORT()?.also {
                     addToken(it.symbol, SemanticType.KEYWORD)
                 }
-                exportStatement.typeParts().qualifiedName().parts?.takeIf { it.isNotEmpty() }?.also { it.removeLast() }
+                exportStatement.typeParts().qualifiedName().parts?.takeIf { it.isNotEmpty() }
+                    ?.also { it.toMutableList().removeLast() }
                     ?.forEach { part ->
                         addToken(part, SemanticType.NAMESPACE)
                     }
@@ -92,7 +93,7 @@ class DocumentSemanticTokensFullService(val documentManager: DocumentManager) : 
                     addToken(it.symbol, SemanticType.KEYWORD)
                 }
                 if (importStatement.importedType().isEmpty()) {
-                    importStatement.qualifiedName().parts.also { it.removeLast() }.forEach { part ->
+                    importStatement.qualifiedName().parts.also { it.toMutableList().removeLast() }.forEach { part ->
                         addToken(part, SemanticType.NAMESPACE)
                     }
                     addToken(

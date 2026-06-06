@@ -23,6 +23,7 @@ import cn.enaium.jimmer.buddy.lang.parser.node.BaseClassNode
 import cn.enaium.jimmer.buddy.project.structure.Environment
 import com.google.devtools.ksp.getClassDeclarationByName
 import org.babyfish.jimmer.dto.compiler.Anno
+import org.babyfish.jimmer.dto.compiler.DtoFile
 import org.babyfish.jimmer.ksp.KspDtoCompiler
 import org.babyfish.jimmer.ksp.error.ErrorProcessor
 import org.babyfish.jimmer.ksp.immutable.ImmutableProcessor
@@ -66,15 +67,14 @@ class KspGen(
         }
     }
 
-    fun dtoProcess(files: Set<Path>, name: String? = null) {
+    fun dtoFileProcess(files: Set<DtoFile>, name: String? = null) {
         val (resolver, environment, sources) = KspProcessor(environment).process(emptySet())
         val option = createKspOption(options, resolver, environment, environment.codeGenerator)
         files.forEach { file ->
             try {
-                val dtoFile = file.toDtoFile(projectDir)
                 val compiler =
                     KspDtoCompiler(
-                        dtoFile,
+                        file,
                         option.context.resolver,
                         option.defaultNullableInputModifier
                     )
@@ -112,5 +112,9 @@ class KspGen(
                 e.printStackTrace()
             }
         }
+    }
+
+    fun dtoPathProcess(files: Set<Path>, name: String? = null) {
+        dtoFileProcess(files.map { it.toDtoFile(projectDir) }.toSet(), name)
     }
 }

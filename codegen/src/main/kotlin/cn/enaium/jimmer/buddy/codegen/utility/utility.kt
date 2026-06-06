@@ -23,6 +23,7 @@ import java.nio.file.Path
 import kotlin.io.path.absolutePathString
 import kotlin.io.path.name
 import kotlin.io.path.readText
+import kotlin.io.path.reader
 import kotlin.io.path.relativeTo
 
 /**
@@ -35,7 +36,7 @@ fun Path.toDtoFile(projectDir: Path): DtoFile {
         }
 
         override fun openReader(): Reader {
-            return this@toDtoFile.readText().reader()
+            return this@toDtoFile.reader()
         }
     }, projectDir.name, this.parent.relativeTo(projectDir).joinToString("/"), emptyList(), this.name)
 }

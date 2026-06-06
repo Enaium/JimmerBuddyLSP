@@ -56,7 +56,7 @@ class KspGenTest {
                 process,
                 dtoDir,
                 emptyMap(),
-            ).dtoProcess((projectDir / "src/main/dto").walk().toSet())
+            ).dtoPathProcess((projectDir / "src/main/dto").walk().toSet())
             assertEquals(1, dtoDir.walk().count())
             genDir.deleteRecursively()
         }

@@ -14,26 +14,25 @@
  * limitations under the License.
  */
 
-package cn.enaium.jimmer.buddy.lang.parser.entity
+package cn.enaium.jimmer.buddy.lang.parser.entity.type
 
-import cn.enaium.jimmer.buddy.lang.parser.entity.type.ClassType
-import cn.enaium.jimmer.buddy.lang.parser.node.BaseClassNode
-import org.babyfish.jimmer.sql.Entity
-import org.babyfish.jimmer.sql.Id
-import org.babyfish.jimmer.sql.Table
+import cn.enaium.jimmer.buddy.lang.parser.node.ClassNode
+import org.babyfish.jimmer.sql.EnumItem
+import org.babyfish.jimmer.sql.EnumType
 
 /**
  * @author Enaium
  */
-@Entity
-@Table(name = "class_node")
-interface ClassEntity {
-    @Id
-    val qualifiedName: String
-
-    val type: ClassType
-
-    val classNode: BaseClassNode
-
-    val path: String
+@EnumType
+enum class ClassType {
+    @EnumItem(name = "ClassNode")
+    CLASS,
+    @EnumItem(name = "InterfaceNode")
+    INTERFACE,
+    @EnumItem(name = "EnumClassNode")
+    ENUM,
+    @EnumItem(name = "AnnotationNode")
+    ANNOTATION,
+    @EnumItem(name = "DataClassNode")
+    DATA
 }

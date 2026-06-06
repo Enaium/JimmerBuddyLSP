@@ -21,6 +21,7 @@ import cn.enaium.jimmer.buddy.dto.lang.DtoProcessor
 import cn.enaium.jimmer.buddy.dto.lang.utility.PropType
 import cn.enaium.jimmer.buddy.dto.lang.utility.findPropTrace
 import cn.enaium.jimmer.buddy.dto.lang.utility.type
+import cn.enaium.jimmer.buddy.lang.parser.entity.type.ClassType
 import cn.enaium.jimmer.buddy.lang.parser.node.AnnotationClassNode
 import cn.enaium.jimmer.buddy.lsp.document.DocumentManager
 import cn.enaium.jimmer.buddy.lsp.document.DtoDocument
@@ -73,7 +74,7 @@ class DocumentCompletionService(val project: Project, val documentManager: Docum
 
     fun CompletionParams.at(document: DtoDocument): List<CompletionItem> {
         var sort = 0
-        val annotationClassNodes = project.environment.directories.flatMap { project.environment.findClasses(it) }.filterIsInstance<AnnotationClassNode>()
+        val annotationClassNodes = project.environment.getIndex().findClasses(ClassType.ANNOTATION)
         return annotationClassNodes.map { annotationClassNode ->
             CompletionItem(annotationClassNode.let {
                 if (annotationClassNode.qualifiedName.contains(".")) {

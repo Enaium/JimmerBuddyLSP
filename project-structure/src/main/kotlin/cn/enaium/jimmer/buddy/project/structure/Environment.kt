@@ -26,6 +26,7 @@ import cn.enaium.jimmer.buddy.project.structure.jackson.ClassNodeMixin
 import cn.enaium.jimmer.buddy.project.structure.jackson.MemberNodeMixin
 import cn.enaium.jimmer.buddy.project.structure.jackson.TypeNodeMixin
 import cn.enaium.jimmer.buddy.project.structure.utility.findGitIgnorePath
+import org.babyfish.jimmer.sql.exception.DatabaseValidationException
 import org.gradle.tooling.GradleConnector
 import org.gradle.tooling.model.idea.IdeaProject
 import org.gradle.tooling.model.idea.IdeaSingleEntryLibraryDependency
@@ -35,6 +36,7 @@ import tools.jackson.module.kotlin.kotlinModule
 import tools.jackson.module.kotlin.readValue
 import java.net.URI
 import java.nio.file.Path
+import java.util.concurrent.CopyOnWriteArraySet
 import kotlin.io.path.*
 
 
@@ -42,9 +44,9 @@ import kotlin.io.path.*
  * @author Enaium
  */
 class Environment {
-    val directories = mutableSetOf<Path>()
-    val modules = mutableSetOf<Module>()
-    val dependencies = mutableSetOf<Path>()
+    val directories = CopyOnWriteArraySet<Path>()
+    val modules = CopyOnWriteArraySet<Module>()
+    val dependencies = CopyOnWriteArraySet<Path>()
 
     var isJimmerProject = false
     var isJavaProject = false
@@ -68,96 +70,108 @@ class Environment {
 
     private val onExits = mutableListOf<() -> Unit>()
 
+    @OptIn(ExperimentalPathApi::class)
     suspend fun process(project: Project) {
         directories.forEach { directory ->
-            val cacheDirectory = directory / ".jblsp"
-            if (!cacheDirectory.exists()) {
-                cacheDirectory.createDirectory()
-            }
-
-            findGitIgnorePath(directory)?.also {
-                if (!it.readText().contains(cacheDirectory.name)) {
-                    it.appendLines(listOf("${cacheDirectory.name}/"))
+            suspend fun init() {
+                val cacheDirectory = directory / ".jblsp"
+                if (!cacheDirectory.exists()) {
+                    cacheDirectory.createDirectory()
                 }
-            }
 
-            val modulesCache = cacheDirectory / "modules.smile"
-            val classesCache = cacheDirectory / "classes.smile"
-            val dependenciesCache = cacheDirectory / "dependencies.smile"
+                findGitIgnorePath(directory)?.also {
+                    if (!it.readText().contains(cacheDirectory.name)) {
+                        it.appendLines(listOf("${cacheDirectory.name}/"))
+                    }
+                }
 
-            val cached = listOf(cacheDirectory, modulesCache, classesCache, dependenciesCache).all { it.exists() }
-            if (cached) {
-                modules.addAll(mapper.readValue<ArrayNode>(modulesCache.readBytes()).toList().map { module ->
-                    Module(
-                        project = project,
-                        directory = URI.create(module.get("directory").asString()).toPath(),
-                        buildDirectory = URI.create(module.get("buildDirectory").asString()).toPath(),
-                        sourceDirectories = module.get("sourceDirectories").toList()
-                            .map { URI.create(it.asString()).toPath() }
-                            .toList(),
-                    )
-                }.toList())
-                dependencies.addAll(mapper.readValue<List<Path>>(dependenciesCache.readBytes()))
-            } else {
-                val connection = GradleConnector.newConnector()
-                    .forProjectDirectory(directory.toFile())
-                    .connect()
+                val modulesCache = cacheDirectory / "modules.smile"
+                val classesCache = cacheDirectory / "classes.smile"
+                val dependenciesCache = cacheDirectory / "dependencies.smile"
 
-                val ideaProject = connection.model(IdeaProject::class.java).addArguments("--offline").get()
 
-                for (module in ideaProject.modules) {
-                    val moduleDependencies = mutableListOf<Path>()
-                    for (dep in module.dependencies) {
-                        if (dep is IdeaSingleEntryLibraryDependency) {
-                            val element = dep.source?.toPath() ?: continue
-                            moduleDependencies.add(element)
+                try {
+                    classIndex = ClassIndexImpl(classesCache)
+                } catch (e: DatabaseValidationException) {
+                    cacheDirectory.deleteRecursively()
+                    init()
+                    return
+                }
+
+                val cached = listOf(cacheDirectory, modulesCache, classesCache, dependenciesCache).all { it.exists() }
+                if (cached) {
+                    modules.addAll(mapper.readValue<ArrayNode>(modulesCache.readBytes()).toList().map { module ->
+                        Module(
+                            project = project,
+                            directory = URI.create(module.get("directory").asString()).toPath(),
+                            buildDirectory = URI.create(module.get("buildDirectory").asString()).toPath(),
+                            sourceDirectories = module.get("sourceDirectories").toList()
+                                .map { URI.create(it.asString()).toPath() }
+                                .toList(),
+                        )
+                    }.toList())
+                    dependencies.addAll(mapper.readValue<List<Path>>(dependenciesCache.readBytes()))
+                } else {
+                    val connection = GradleConnector.newConnector()
+                        .forProjectDirectory(directory.toFile())
+                        .connect()
+
+                    val ideaProject = connection.model(IdeaProject::class.java).get()
+
+                    for (module in ideaProject.modules) {
+                        val moduleDependencies = mutableListOf<Path>()
+                        for (dep in module.dependencies) {
+                            if (dep is IdeaSingleEntryLibraryDependency) {
+                                val element = dep.source?.toPath() ?: continue
+                                moduleDependencies.add(element)
+                            }
                         }
+
+                        dependencies.addAll(moduleDependencies)
+
+                        modules.add(
+                            Module(
+                                project,
+                                module.gradleProject.projectDirectory.toPath(),
+                                module.gradleProject.buildDirectory.toPath(),
+                                module.contentRoots.flatMap { roots -> roots.sourceDirectories.map { it.directory.toPath() } },
+                            )
+                        )
                     }
 
-                    dependencies.addAll(moduleDependencies)
-
-                    modules.add(
-                        Module(
-                            project,
-                            module.gradleProject.projectDirectory.toPath(),
-                            module.gradleProject.buildDirectory.toPath(),
-                            module.contentRoots.flatMap { roots -> roots.sourceDirectories.map { it.directory.toPath() } },
-                        )
-                    )
+                    connection.close()
                 }
 
-                connection.close()
-            }
+                isJimmerProject = dependencies.any { it.name.startsWith("jimmer-core") }
+                isKotlinProject = dependencies.any { it.name.startsWith("jimmer-core-kotlin") } &&
+                        modules.any { module -> module.sourceDirectories.any { it.name == "kotlin" } }
 
-            isJimmerProject = dependencies.any { it.name.startsWith("jimmer-core") }
-            isKotlinProject = dependencies.any { it.name.startsWith("jimmer-core-kotlin") } &&
-                    modules.any { module -> module.sourceDirectories.any { it.name == "kotlin" } }
-
-            if (!isKotlinProject) {
-                isJavaProject = isJimmerProject
-            }
-
-
-            val saveCache = {
-                modulesCache.writeBytes(mapper.writeValueAsBytes(modules))
-                dependenciesCache.writeBytes(mapper.writeValueAsBytes(dependencies))
-            }
-
-            classIndex = ClassIndexImpl(classesCache)
-            if (!cached) {
-                val jdkSrc = Path(System.getProperty("java.home")) / "lib/src.zip"
-                val sourceDirOrJar = dependencies + modules.flatMap { it.sourceDirectories } + listOf(jdkSrc)
-                if (isKotlinProject) {
-                    KotlinSourceProcessor(sourceDirOrJar, classIndex!!).process()
-                } else if (isJavaProject) {
-                    JavaSourceProcessor(sourceDirOrJar, classIndex!!).process()
+                if (!isKotlinProject) {
+                    isJavaProject = isJimmerProject
                 }
 
 
-                saveCache()
+                val saveCache = {
+                    modulesCache.writeBytes(mapper.writeValueAsBytes(modules))
+                    dependenciesCache.writeBytes(mapper.writeValueAsBytes(dependencies))
+                }
+
+                if (!cached) {
+                    val jdkSrc = Path(System.getProperty("java.home")) / "lib/src.zip"
+                    val sourceDirOrJar = dependencies + modules.flatMap { it.sourceDirectories } + listOf(jdkSrc)
+                    if (isKotlinProject) {
+                        KotlinSourceProcessor(sourceDirOrJar, classIndex!!).process()
+                    } else if (isJavaProject) {
+                        JavaSourceProcessor(sourceDirOrJar, classIndex!!).process()
+                    }
+
+                    saveCache()
+                }
+
+                onExits.add(saveCache)
             }
 
-            onExits.add(saveCache)
+            init()
         }
     }
 

@@ -21,6 +21,7 @@ import org.babyfish.jimmer.sql.dialect.SQLiteDialect
 import org.babyfish.jimmer.sql.kt.KSqlClient
 import org.babyfish.jimmer.sql.kt.newKSqlClient
 import org.babyfish.jimmer.sql.runtime.ConnectionManager
+import org.babyfish.jimmer.sql.runtime.DatabaseValidationMode
 import org.babyfish.jimmer.sql.runtime.DefaultDatabaseNamingStrategy
 import org.sqlite.javax.SQLiteConnectionPoolDataSource
 import java.nio.file.Path
@@ -39,15 +40,16 @@ fun sql(path: Path): KSqlClient {
                 statement.execute(
                     """
                     create table if not exists class_node(
-                        qualified_name text primary key,
-                        class_node blob,
-                        path text
+                        qualified_name text primary key not null,
+                        type text not null,
+                        class_node blob not null,
+                        path text not null
                     )
                 """.trimIndent()
                 )
             }
         }
-
+        setDatabaseValidationMode(DatabaseValidationMode.ERROR)
         setConnectionManager(ConnectionManager.simpleConnectionManager(dataSource))
         setScalarProvider(ClassEntity::classNode, ClassNodeScalarProvider())
         setDatabaseNamingStrategy(DefaultDatabaseNamingStrategy.LOWER_CASE)

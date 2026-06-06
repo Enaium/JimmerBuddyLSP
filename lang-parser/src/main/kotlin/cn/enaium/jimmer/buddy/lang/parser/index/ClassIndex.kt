@@ -16,6 +16,7 @@
 
 package cn.enaium.jimmer.buddy.lang.parser.index
 
+import cn.enaium.jimmer.buddy.lang.parser.entity.type.ClassType
 import cn.enaium.jimmer.buddy.lang.parser.node.BaseClassNode
 import java.nio.file.Path
 
@@ -26,6 +27,8 @@ interface ClassIndex {
     fun findClass(qualifiedName: String): BaseClassNode?
 
     fun findClasses(directory: Path): List<BaseClassNode>
+
+    fun findClasses(type: ClassType): List<BaseClassNode>
 
     fun upsertClass(qualifiedName: String, classNode: BaseClassNode)
 }

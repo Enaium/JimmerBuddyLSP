@@ -647,11 +647,11 @@ class AptProcessor(
             is ClassTypeNode -> {
                 return createDeclaredType(
                     getQualifiedName = {
-                        this.qualifiedName ?: throw NullPointerException("cannot find class ${this.name}")
+                        this.qualifiedName() ?: throw NullPointerException("cannot find class ${this.name}")
                     },
                     asElement = {
-                        findClass(this.qualifiedName)?.asTypeElement()
-                            ?: this.qualifiedName?.let { createTypeElement(it) }
+                        findClass(this.qualifiedName())?.asTypeElement()
+                            ?: this.qualifiedName()?.let { createTypeElement(it) }
                             ?: throw IllegalStateException("cannot find class ${this.name}")
                     },
                     getTypeArguments = {
@@ -659,12 +659,12 @@ class AptProcessor(
                             if (argument is ClassTypeNode) {
                                 createDeclaredType(
                                     getQualifiedName = {
-                                        argument.qualifiedName
+                                        argument.qualifiedName()
                                             ?: throw NullPointerException("cannot find class ${this.name}")
                                     },
                                     asElement = {
-                                        caches[argument.qualifiedName]
-                                            ?: findClass(argument.qualifiedName)?.asTypeElement()
+                                        caches[argument.qualifiedName()]
+                                            ?: findClass(argument.qualifiedName())?.asTypeElement()
                                             ?: this.qualifiedName?.let { createTypeElement(it) }
                                             ?: throw IllegalStateException("Generic element is null")
                                     },
@@ -871,4 +871,10 @@ class AptProcessor(
             }
         }
     }
+
+    private fun ClassTypeNode.qualifiedName() = qualifiedName ?: listOf(
+        List::class, Set::class, Collection::class,
+        Long::class, Int::class, Short::class,
+        Byte::class, Float::class, Double::class, String::class,
+    ).find { it.simpleName == name }?.java?.name
 }

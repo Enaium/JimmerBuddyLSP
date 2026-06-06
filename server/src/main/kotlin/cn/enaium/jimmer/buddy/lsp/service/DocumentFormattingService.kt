@@ -79,6 +79,8 @@ class DocumentFormattingService(val documentManager: DocumentManager) : Document
                 .around(DtoLexer.AS, 0)
                 .between(DtoLexer.RIGHT_ARROW, DtoLexer.PACKAGE, 1)
                 .between(DtoLexer.AS, DtoLexer.LEFT_PARENTHESIS, 0)
+                .ruleAround(DtoParser.RULE_explicitProp, 0)
+                .ruleAround(DtoParser.RULE_macro, 0)
                 .tokenAndRuleBetween(DtoLexer.Identifier, DtoParser.RULE_dtoBody, 1)
                 .tokenAndRuleBetween(DtoLexer.EXPORT, DtoParser.RULE_typeParts, 1)
                 .tokenAndRuleBetween(DtoLexer.PACKAGE, DtoParser.RULE_packageParts, 1)

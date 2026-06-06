@@ -88,12 +88,11 @@ class Formatter(private val tokens: List<Token>) {
         ruleInstances: Map<Int, List<IntRange>>
     ) {
         val instances = ruleInstances[model.ruleIndex] ?: return
-        for (token in snapshot) {
-            if (token.type != model.token) continue
-            if (instances.any { token.tokenIndex in it }) {
-                model.beforeSpaceCount?.let { adjustBefore(snapshot, token, spaceToken, it) }
-                model.afterSpaceCount?.let { adjustAfter(snapshot, token, spaceToken, it) }
-            }
+        for (instance in instances) {
+            val firstToken = snapshot.find { it.tokenIndex == instance.first } ?: continue
+            val lastToken = snapshot.find { it.tokenIndex == instance.last } ?: continue
+            model.beforeSpaceCount?.let { adjustBefore(snapshot, firstToken, spaceToken, it) }
+            model.afterSpaceCount?.let { adjustAfter(snapshot, lastToken, spaceToken, it) }
         }
     }
 

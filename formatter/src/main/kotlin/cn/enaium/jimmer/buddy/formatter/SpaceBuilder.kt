@@ -39,7 +39,6 @@ class SpaceBuilder(val spaceToken: Int) {
 
     class RuleAround(
         val ruleIndex: Int,
-        val token: Int,
         val beforeSpaceCount: Int? = null,
         val afterSpaceCount: Int? = null,
     ) : Model()
@@ -94,34 +93,27 @@ class SpaceBuilder(val spaceToken: Int) {
         return this
     }
 
-    // ---- Rule-scoped token helpers (apply only when token is within the rule) ----
-
-    fun ruleAround(ruleIndex: Int, token: Int, space: Int): SpaceBuilder {
-        models.add(RuleAround(ruleIndex, token, space, space))
-        return this
-    }
-
-    fun ruleAround(ruleIndex: Int, token: Int, before: Int, after: Int): SpaceBuilder {
-        models.add(RuleAround(ruleIndex, token, before, after))
-        return this
-    }
-
-    fun ruleBefore(ruleIndex: Int, token: Int, space: Int): SpaceBuilder {
-        models.add(RuleAround(ruleIndex, token, beforeSpaceCount = space))
-        return this
-    }
-
-    fun ruleAfter(ruleIndex: Int, token: Int, space: Int): SpaceBuilder {
-        models.add(RuleAround(ruleIndex, token, afterSpaceCount = space))
-        return this
-    }
-
-    fun ruleBetween(ruleIndex: Int, beforeToken: Int, afterToken: Int, space: Int): SpaceBuilder {
-        models.add(RuleBetween(ruleIndex, beforeToken, afterToken, space))
-        return this
-    }
-
     // ---- Rule-boundary helpers ----
+
+    fun ruleAround(ruleIndex: Int, space: Int): SpaceBuilder {
+        models.add(RuleAround(ruleIndex, space, space))
+        return this
+    }
+
+    fun ruleAround(ruleIndex: Int, before: Int, after: Int): SpaceBuilder {
+        models.add(RuleAround(ruleIndex, before, after))
+        return this
+    }
+
+    fun ruleBefore(ruleIndex: Int, space: Int): SpaceBuilder {
+        models.add(RuleAround(ruleIndex, beforeSpaceCount = space))
+        return this
+    }
+
+    fun ruleAfter(ruleIndex: Int, space: Int): SpaceBuilder {
+        models.add(RuleAround(ruleIndex, afterSpaceCount = space))
+        return this
+    }
 
     fun tokenAndRuleBetween(token: Int, ruleIndex: Int, space: Int): SpaceBuilder {
         models.add(TokenAndRuleBetween(token, ruleIndex, space))

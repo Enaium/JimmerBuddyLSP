@@ -20,8 +20,15 @@ import cn.enaium.jimmer.buddy.lang.parser.entity.ClassEntity
 import cn.enaium.jimmer.buddy.lang.parser.entity.classNode
 import cn.enaium.jimmer.buddy.lang.parser.entity.path
 import cn.enaium.jimmer.buddy.lang.parser.entity.qualifiedName
+import cn.enaium.jimmer.buddy.lang.parser.entity.type
+import cn.enaium.jimmer.buddy.lang.parser.entity.type.ClassType
 import cn.enaium.jimmer.buddy.lang.parser.index.ClassIndex
+import cn.enaium.jimmer.buddy.lang.parser.node.AnnotationClassNode
 import cn.enaium.jimmer.buddy.lang.parser.node.BaseClassNode
+import cn.enaium.jimmer.buddy.lang.parser.node.ClassNode
+import cn.enaium.jimmer.buddy.lang.parser.node.DataClassNode
+import cn.enaium.jimmer.buddy.lang.parser.node.EnumClassNode
+import cn.enaium.jimmer.buddy.lang.parser.node.InterfaceNode
 import cn.enaium.jimmer.buddy.project.structure.db.sql
 import org.babyfish.jimmer.sql.kt.ast.expression.eq
 import org.babyfish.jimmer.sql.kt.ast.expression.ilike
@@ -48,11 +55,38 @@ class ClassIndexImpl(val path: Path) : ClassIndex {
         }.execute()
     }
 
+    override fun findClasses(type: ClassType): List<BaseClassNode> {
+        return sql.createQuery(ClassEntity::class) {
+            where(table.type eq type)
+            select(table.classNode)
+        }.execute()
+    }
+
     override fun upsertClass(qualifiedName: String, classNode: BaseClassNode) {
         sql.save(ClassEntity {
             this.qualifiedName = qualifiedName
+            this.type = when (classNode) {
+                is ClassNode -> {
+                    ClassType.CLASS
+                }
+                is InterfaceNode -> {
+                    ClassType.INTERFACE
+                }
+                is EnumClassNode -> {
+                    ClassType.ENUM
+                }
+                is DataClassNode -> {
+                    ClassType.DATA
+                }
+                is AnnotationClassNode -> {
+                    ClassType.ANNOTATION
+                }
+                else -> {
+                    throw IllegalArgumentException("Class type ${classNode.qualifiedName} is not supported")
+                }
+            }
             this.classNode = classNode
-            path = classNode.path.absolutePathString()
+            this.path = classNode.path.absolutePathString()
         })
     }
 }

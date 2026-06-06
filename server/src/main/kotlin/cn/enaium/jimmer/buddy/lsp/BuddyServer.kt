@@ -87,10 +87,20 @@ class BuddyServer : LanguageServer {
                                     UUID.randomUUID().toString(),
                                     "textDocument/hover",
                                     HoverRegistrationOptions()
+                                ),
+                                Registration(
+                                    UUID.randomUUID().toString(),
+                                    "textDocument/codeLens",
+                                    CodeLensOptions().apply {
+                                        resolveProvider = true
+                                    }
                                 )
                             )
                         )
                     )
+                    client?.refreshSemanticTokens()
+                    client?.refreshCodeLenses()
+                    client?.refreshFoldingRanges()
                 }
 
                 process("Gen source and dto") {
@@ -117,7 +127,7 @@ class BuddyServer : LanguageServer {
                                 val aptGen = AptGen(
                                     module.directory,
                                     project.environment,
-                                    module.buildDirectory / "generated/sources/annotationProcessor" / main / language,
+                                    module.buildDirectory / "generated/sources/annotationProcessor" / language / main,
                                     emptyMap()
                                 )
                                 aptGen.sourceProcess(classes)

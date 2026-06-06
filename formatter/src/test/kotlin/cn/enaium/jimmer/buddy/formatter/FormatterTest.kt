@@ -161,30 +161,6 @@ class FormatterTest {
     }
 
     @Test
-    fun `test rule around formatting`() {
-        val input = "SimpleView {\n    prop1\n}"
-        val tokenStream =
-            CommonTokenStream(DtoLexer(CharStreams.fromString(input))).also { it.fill() }
-
-        val parser = DtoParser(
-            CommonTokenStream(DtoLexer(CharStreams.fromString(input)))
-        )
-        val tree = parser.dto()
-
-        val ruleInstances = mutableMapOf<Int, MutableList<IntRange>>()
-        collectRuleInstances(tree, ruleInstances)
-
-        val result = Formatter(tokenStream.tokens).process(
-            SpaceBuilder(DtoLexer.WhiteSpace)
-                .ruleAround(DtoParser.RULE_dtoBody, DtoLexer.LEFT_BRACE, 0)
-                .ruleAround(DtoParser.RULE_dtoBody, DtoLexer.RIGHT_BRACE, 0),
-            ruleInstances = ruleInstances
-        )
-
-        assertEquals("SimpleView{\n    prop1\n}", result)
-    }
-
-    @Test
     fun `test token and rule between`() {
         val input = "import  com.example.Foo"
         val tokenStream =

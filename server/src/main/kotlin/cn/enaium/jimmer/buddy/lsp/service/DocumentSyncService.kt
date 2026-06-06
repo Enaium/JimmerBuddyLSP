@@ -37,12 +37,22 @@ abstract class DocumentSyncService(val project: Project, val documentManager: Do
     val deq = DelayedExecutionQueue()
 
     override fun didOpen(params: DidOpenTextDocumentParams) {
+        try {
+            project.environment.getIndex()
+        } catch (e: Throwable) {
+            return
+        }
         val content = params.textDocument.text
         content.isBlank() && return
         validate(content, params.textDocument.uri, Type.OPEN)
     }
 
     override fun didChange(params: DidChangeTextDocumentParams) {
+        try {
+            project.environment.getIndex()
+        } catch (e: Throwable) {
+            return
+        }
         val content = params.contentChanges[0].text
         content.isBlank() && return
         validate(content, params.textDocument.uri, Type.CHANGE)
@@ -53,6 +63,11 @@ abstract class DocumentSyncService(val project: Project, val documentManager: Do
     }
 
     override fun didSave(params: DidSaveTextDocumentParams) {
+        try {
+            project.environment.getIndex()
+        } catch (e: Throwable) {
+            return
+        }
         val content = params.text
         content.isBlank() && return
         validate(content, params.textDocument.uri, Type.SAVE)
@@ -78,7 +93,7 @@ abstract class DocumentSyncService(val project: Project, val documentManager: Do
             }
 
             project.environment.isJavaProject -> {
-                buildDirectory / "generated/sources/annotationProcessor" / main / "java"
+                buildDirectory / "generated/sources/annotationProcessor/java" / main
             }
 
             else -> null

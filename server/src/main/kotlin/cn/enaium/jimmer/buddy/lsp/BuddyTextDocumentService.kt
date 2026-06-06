@@ -17,6 +17,7 @@
 package cn.enaium.jimmer.buddy.lsp
 
 import cn.enaium.jimmer.buddy.lsp.document.DocumentManager
+import cn.enaium.jimmer.buddy.lsp.service.DocumentCodeLensService
 import cn.enaium.jimmer.buddy.lsp.service.DocumentCompletionService
 import cn.enaium.jimmer.buddy.lsp.service.DocumentFoldingRangeService
 import cn.enaium.jimmer.buddy.lsp.service.DocumentFormattingService
@@ -47,6 +48,7 @@ class BuddyTextDocumentService(project: Project) : TextDocumentService {
         )
     private val documentFormattingService = DocumentFormattingService(documentManager)
     private val documentHoverService = DocumentHoverService(project, documentManager)
+    private val documentCodeLensService = DocumentCodeLensService(project, documentManager)
 
     override fun didOpen(params: DidOpenTextDocumentParams) {
         documentSyncServices.forEach { it.didOpen(params) }
@@ -82,5 +84,9 @@ class BuddyTextDocumentService(project: Project) : TextDocumentService {
 
     override fun hover(params: HoverParams): CompletableFuture<Hover?> {
         return documentHoverService.hover(params)
+    }
+
+    override fun codeLens(params: CodeLensParams): CompletableFuture<List<CodeLens>> {
+        return documentCodeLensService.codeLens(params)
     }
 }

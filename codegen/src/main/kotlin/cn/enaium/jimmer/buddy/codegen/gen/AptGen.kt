@@ -80,6 +80,7 @@ class AptGen(
         } catch (e: Throwable) {
             e.printStackTrace()
         }
+        System.gc()
     }
 
     fun dtoProcess(files: Set<Path>, name: String? = null) {
@@ -116,5 +117,6 @@ class AptGen(
                 e.printStackTrace()
             }
         }
+        System.gc()
     }
 }

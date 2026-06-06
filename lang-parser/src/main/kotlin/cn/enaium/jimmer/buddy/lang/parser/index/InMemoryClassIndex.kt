@@ -16,6 +16,7 @@
 
 package cn.enaium.jimmer.buddy.lang.parser.index
 
+import cn.enaium.jimmer.buddy.lang.parser.entity.type.ClassType
 import cn.enaium.jimmer.buddy.lang.parser.node.BaseClassNode
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
@@ -41,6 +42,10 @@ class InMemoryClassIndex : ClassIndex {
     override fun findClasses(directory: Path): List<BaseClassNode> {
         val prefix = directory.absolutePathString()
         return classes.values.filter { it.path.absolutePathString().startsWith(prefix) }
+    }
+
+    override fun findClasses(type: ClassType): List<BaseClassNode> {
+        return classes.values.filter { it::class.simpleName?.contains(type.name, ignoreCase = true) == true }
     }
 
     override fun upsertClass(qualifiedName: String, classNode: BaseClassNode) {

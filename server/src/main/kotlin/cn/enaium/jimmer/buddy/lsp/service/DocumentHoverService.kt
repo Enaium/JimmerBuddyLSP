@@ -160,7 +160,6 @@ class DocumentHoverService(val project: Project, val documentManager: DocumentMa
                 }
             }
 
-
             null
         }
     }

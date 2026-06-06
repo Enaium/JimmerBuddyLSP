@@ -117,7 +117,7 @@ data class ImmutableProp(
         classNode1: BaseClassNode,
         classNode2: BaseClassNode
     ): Boolean {
-        if (classNode1 == classNode2) {
+        if (classNode1.qualifiedName == classNode2.qualifiedName) {
             return true
         }
         if (classNode1 is InterfaceNode && classNode1.supers.filterIsInstance<ClassTypeNode>().any {

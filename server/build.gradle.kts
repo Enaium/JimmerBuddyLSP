@@ -25,6 +25,7 @@ dependencies {
     implementation(libs.symbol.processing.api)
     implementation(libs.jspecify)
     implementation(libs.sqlite)
+    implementation(libs.logback)
 }
 
 tasks.test {

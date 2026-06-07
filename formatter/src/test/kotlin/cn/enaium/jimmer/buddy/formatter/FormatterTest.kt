@@ -276,6 +276,80 @@ class FormatterTest {
         assertEquals(expected, result)
     }
 
+    @Test
+    fun `test doc comment indentation preserves continuation line alignment`() {
+        val input = "SimpleView {\n" +
+                "/**\n" +
+                " * comment\n" +
+                " */\n" +
+                "fun(prop1)\n" +
+                "}"
+        val tokenStream =
+            CommonTokenStream(DtoLexer(CharStreams.fromString(input))).also { it.fill() }
+        val parser = DtoParser(
+            CommonTokenStream(DtoLexer(CharStreams.fromString(input)))
+        )
+        val tree = parser.dto()
+
+        val ruleInstances = mutableMapOf<Int, MutableList<IntRange>>()
+        collectRuleInstances(tree, ruleInstances)
+
+        val result = Formatter(tokenStream.tokens).process(
+            SpaceBuilder(DtoLexer.WhiteSpace, blockCommentTokens = setOf(DtoLexer.DocComment, DtoLexer.BlockComment))
+                .around(DtoLexer.COMMA, 0, 1)
+                .around(DtoLexer.LEFT_PARENTHESIS, 0)
+                .around(DtoLexer.RIGHT_PARENTHESIS, 0)
+                .ruleAround(DtoParser.RULE_explicitProp, 0)
+                .indent(DtoParser.RULE_dtoBody),
+            ruleInstances = ruleInstances
+        )
+
+        val expected = "SimpleView {\n" +
+                "    /**\n" +
+                "     * comment\n" +
+                "     */\n" +
+                "    fun(prop1)\n" +
+                "}"
+        assertEquals(expected, result)
+    }
+
+    @Test
+    fun `test block comment indentation preserves continuation line alignment`() {
+        val input = "SimpleView {\n" +
+                "/*\n" +
+                " * block\n" +
+                " */\n" +
+                "fun(prop1)\n" +
+                "}"
+        val tokenStream =
+            CommonTokenStream(DtoLexer(CharStreams.fromString(input))).also { it.fill() }
+        val parser = DtoParser(
+            CommonTokenStream(DtoLexer(CharStreams.fromString(input)))
+        )
+        val tree = parser.dto()
+
+        val ruleInstances = mutableMapOf<Int, MutableList<IntRange>>()
+        collectRuleInstances(tree, ruleInstances)
+
+        val result = Formatter(tokenStream.tokens).process(
+            SpaceBuilder(DtoLexer.WhiteSpace, blockCommentTokens = setOf(DtoLexer.DocComment, DtoLexer.BlockComment))
+                .around(DtoLexer.COMMA, 0, 1)
+                .around(DtoLexer.LEFT_PARENTHESIS, 0)
+                .around(DtoLexer.RIGHT_PARENTHESIS, 0)
+                .ruleAround(DtoParser.RULE_explicitProp, 0)
+                .indent(DtoParser.RULE_dtoBody),
+            ruleInstances = ruleInstances
+        )
+
+        val expected = "SimpleView {\n" +
+                "    /*\n" +
+                "     * block\n" +
+                "     */\n" +
+                "    fun(prop1)\n" +
+                "}"
+        assertEquals(expected, result)
+    }
+
     private fun collectRuleInstances(ctx: ParserRuleContext, instances: MutableMap<Int, MutableList<IntRange>>) {
         val ruleIndex = ctx.ruleIndex
         if (ruleIndex >= 0) {

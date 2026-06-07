@@ -85,7 +85,7 @@ class KotlinSourceProcessor(val sourceDirOrJar: Set<Path>, private val classInde
                 if (!entry.name.endsWith(".kt")) continue
                 val entryName = entry.name
                 val content = jar.getInputStream(entry).readAllBytes().decodeToString()
-                addFile(content, path / entryName) {
+                addFile(content, path.parent / "${path.name}!" / entryName) {
                     JarFile(path.toFile()).use { j ->
                         j.getInputStream(j.getEntry(entryName)).readAllBytes().decodeToString()
                     }
@@ -99,7 +99,7 @@ class KotlinSourceProcessor(val sourceDirOrJar: Set<Path>, private val classInde
         addFile(content, filePath) { filePath.readText() }
     }
 
-    private fun addFile(content: String, path: Path, contentProvider: () -> String) {
+    fun addFile(content: String, path: Path, contentProvider: () -> String) {
         val qualifiedNames = extractQualifiedNames(content)
         if (qualifiedNames.isEmpty()) return
         allQualifiedNames.addAll(qualifiedNames)

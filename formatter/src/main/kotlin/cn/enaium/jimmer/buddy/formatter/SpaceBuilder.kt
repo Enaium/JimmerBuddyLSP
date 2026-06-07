@@ -56,6 +56,12 @@ class SpaceBuilder(val spaceToken: Int, val blockCommentTokens: Set<Int> = empty
         val spaceCount: Int,
     ) : Model()
 
+    class RuleAndTokenBetween(
+        val ruleIndex: Int,
+        val token: Int,
+        val spaceCount: Int,
+    ) : Model()
+
     class RuleAndRuleBetween(
         val ruleBefore: Int,
         val ruleAfter: Int,
@@ -117,6 +123,11 @@ class SpaceBuilder(val spaceToken: Int, val blockCommentTokens: Set<Int> = empty
 
     fun tokenAndRuleBetween(token: Int, ruleIndex: Int, space: Int): SpaceBuilder {
         models.add(TokenAndRuleBetween(token, ruleIndex, space))
+        return this
+    }
+
+    fun ruleAndTokenBetween(ruleIndex: Int, token: Int, space: Int): SpaceBuilder {
+        models.add(RuleAndTokenBetween(ruleIndex, token, space))
         return this
     }
 

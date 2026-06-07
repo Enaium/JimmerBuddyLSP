@@ -28,11 +28,9 @@ import org.eclipse.lsp4j.CodeLensParams
 import org.eclipse.lsp4j.Command
 import java.net.URI
 import java.util.concurrent.CompletableFuture
-import kotlin.collections.emptyList
 import kotlin.io.path.div
 import kotlin.io.path.exists
 import kotlin.io.path.listDirectoryEntries
-import kotlin.io.path.name
 import kotlin.io.path.toPath
 
 /**
@@ -49,7 +47,7 @@ class DocumentCodeLensService(val project: Project, val documentManager: Documen
                 ?: document.type?.packageName?.let { "$it.dto" }
                 ?: return@future codeLens
 
-            val buildDirectory = project.environment.modules.find {
+            val buildDirectory = project.environment.modules.sortedByDescending { it.directory.nameCount }.find {
                 URI.create(params.textDocument.uri).toPath().startsWith(it.directory)
             }?.buildDirectory ?: return@future codeLens
 
@@ -72,19 +70,19 @@ class DocumentCodeLensService(val project: Project, val documentManager: Documen
             } else if (project.environment.isJavaProject) {
                 (buildDirectory / "generated/sources/annotationProcessor/java").takeIf { it.exists() }
                     ?.listDirectoryEntries()?.forEach { entry ->
-                    document.cst.dtoType().forEach { dtoType ->
-                        val generated = entry / "${packageName.replace('.', '/')}/${dtoType.name.text}.java"
-                        if (generated.exists()) {
-                            codeLens.add(
-                                CodeLens(
-                                    dtoType.name.range(),
-                                    Command("Generated", ""),
-                                    null
+                        document.cst.dtoType().forEach { dtoType ->
+                            val generated = entry / "${packageName.replace('.', '/')}/${dtoType.name.text}.java"
+                            if (generated.exists()) {
+                                codeLens.add(
+                                    CodeLens(
+                                        dtoType.name.range(),
+                                        Command("Generated", ""),
+                                        null
+                                    )
                                 )
-                            )
+                            }
                         }
                     }
-                }
             }
             codeLens
         }

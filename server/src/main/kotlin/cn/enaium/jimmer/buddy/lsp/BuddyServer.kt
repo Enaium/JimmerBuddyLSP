@@ -43,8 +43,8 @@ class BuddyServer : LanguageServer {
 
     override fun initialize(params: InitializeParams): CompletableFuture<InitializeResult> {
         return CoroutineScope(Dispatchers.Default).future {
-            params.workspaceFolders.firstOrNull() {
-                project.environment.directories.add(URI.create(it.uri).toPath())
+            params.rootUri?.also {
+                project.environment.directories.add(URI.create(it).toPath())
             }
 
             CoroutineScope(Dispatchers.Default).launch {
@@ -174,6 +174,5 @@ class BuddyServer : LanguageServer {
     }
 
     override fun setTrace(params: SetTraceParams) {
-        println(params.value)
     }
 }

@@ -25,7 +25,11 @@ class JavaDocumentSyncService(project: Project, documentManager: DocumentManager
             Type.CHANGE -> {
                 deq.schedule("genSource", 2000) {
                     val index = project.environment.getIndex()
-                    JavaSourceProcessor(setOf(path), index).process()
+                    JavaSourceProcessor(emptySet(), index).apply {
+                        addFile(content, path) {
+                            content
+                        }
+                    }.process()
                     val module =
                         project.environment.modules.sortedByDescending { it.directory.nameCount }
                             .find { path.startsWith(it.directory) } ?: return@schedule

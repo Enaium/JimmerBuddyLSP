@@ -19,12 +19,7 @@ package cn.enaium.jimmer.buddy.lsp.service
 import cn.enaium.jimmer.buddy.codegen.gen.AptGen
 import cn.enaium.jimmer.buddy.codegen.gen.KspGen
 import cn.enaium.jimmer.buddy.codegen.utility.toDtoFile
-import cn.enaium.jimmer.buddy.dto.lang.Context
-import cn.enaium.jimmer.buddy.dto.lang.DocumentDtoCompiler
-import cn.enaium.jimmer.buddy.dto.lang.DtoLexer
-import cn.enaium.jimmer.buddy.dto.lang.DtoParser
-import cn.enaium.jimmer.buddy.dto.lang.DtoProcessor
-import cn.enaium.jimmer.buddy.dto.lang.ImmutableType
+import cn.enaium.jimmer.buddy.dto.lang.*
 import cn.enaium.jimmer.buddy.lsp.client
 import cn.enaium.jimmer.buddy.lsp.document.DocumentManager
 import cn.enaium.jimmer.buddy.lsp.document.DtoDocument
@@ -39,11 +34,7 @@ import org.eclipse.lsp4j.*
 import org.eclipse.lsp4j.jsonrpc.messages.Either
 import java.io.Reader
 import java.net.URI
-import kotlin.io.path.absolutePathString
-import kotlin.io.path.extension
-import kotlin.io.path.name
-import kotlin.io.path.relativeTo
-import kotlin.io.path.toPath
+import kotlin.io.path.*
 
 /**
  * @author Enaium
@@ -107,7 +98,8 @@ class DtoDocumentSyncService(project: Project, documentManager: DocumentManager)
                 Type.CHANGE -> {
                     deq.schedule("genDto", 2000) {
                         val module =
-                            project.environment.modules.find { path.startsWith(it.directory) } ?: return@schedule
+                            project.environment.modules.sortedByDescending { it.directory.nameCount }
+                                .find { path.startsWith(it.directory) } ?: return@schedule
                         val genDir = getGenDirectory(path) ?: return@schedule
 
                         val dtoFile = DtoFile(

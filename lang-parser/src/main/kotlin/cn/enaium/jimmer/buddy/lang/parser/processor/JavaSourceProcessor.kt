@@ -98,7 +98,7 @@ class JavaSourceProcessor(val sourceDirOrJar: Set<Path>, private val classIndex:
                 if (!entry.name.endsWith(".java")) continue
                 val entryName = entry.name
                 val content = jar.getInputStream(entry).readAllBytes().decodeToString()
-                addFile(content, path / entryName) {
+                addFile(content, path.parent / "${path.name}!" / entryName) {
                     JarFile(path.toFile()).use { j ->
                         j.getInputStream(j.getEntry(entryName)).readAllBytes().decodeToString()
                     }
@@ -116,7 +116,7 @@ class JavaSourceProcessor(val sourceDirOrJar: Set<Path>, private val classIndex:
                 if (relevantPrefixes.none { entry.name.startsWith(it) } || !entry.name.endsWith(".java")) continue
                 val entryName = entry.name
                 val content = zip.getInputStream(entry).readAllBytes().decodeToString()
-                addFile(content, path / entryName) {
+                addFile(content, path.parent / "${path.name}!" / entryName) {
                     ZipFile(path.toFile()).use { z ->
                         z.getInputStream(z.getEntry(entryName)).readAllBytes().decodeToString()
                     }
@@ -130,7 +130,7 @@ class JavaSourceProcessor(val sourceDirOrJar: Set<Path>, private val classIndex:
         addFile(content, filePath) { filePath.readText() }
     }
 
-    private fun addFile(content: String, path: Path, contentProvider: () -> String) {
+    fun addFile(content: String, path: Path, contentProvider: () -> String) {
         val qualifiedNames = extractQualifiedNames(content)
         if (qualifiedNames.isEmpty()) return
         allQualifiedNames.addAll(qualifiedNames)

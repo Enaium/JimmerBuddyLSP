@@ -76,12 +76,12 @@ class DocumentFormattingService(val documentManager: DocumentManager) : Document
                 .between(DtoLexer.RIGHT_PARENTHESIS, DtoLexer.AS, 1)
                 .between(DtoLexer.RIGHT_ARROW, DtoLexer.PACKAGE, 1)
                 .between(DtoLexer.AS, DtoLexer.LEFT_PARENTHESIS, 0)
-                .ruleAround(DtoParser.RULE_explicitProp, 0)
                 .ruleAround(DtoParser.RULE_macro, 0)
                 .tokenAndRuleBetween(DtoLexer.Identifier, DtoParser.RULE_dtoBody, 1)
                 .tokenAndRuleBetween(DtoLexer.EXPORT, DtoParser.RULE_typeParts, 1)
                 .tokenAndRuleBetween(DtoLexer.PACKAGE, DtoParser.RULE_packageParts, 1)
                 .ruleAndRuleBetween(DtoParser.RULE_explicitProp, DtoParser.RULE_dtoBody, 1)
+                .ruleAndTokenBetween(DtoParser.RULE_macro, DtoLexer.MINUS, 1)
                 .indent(DtoParser.RULE_dtoBody)
                 .indent(DtoParser.RULE_aliasGroupBody)
                 .indent(DtoParser.RULE_enumBody),

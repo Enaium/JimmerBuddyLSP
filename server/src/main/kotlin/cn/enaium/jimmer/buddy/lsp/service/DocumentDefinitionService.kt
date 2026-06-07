@@ -21,14 +21,13 @@ import cn.enaium.jimmer.buddy.dto.lang.DtoProcessor
 import cn.enaium.jimmer.buddy.lang.parser.utility.findParent
 import cn.enaium.jimmer.buddy.lsp.document.DocumentManager
 import cn.enaium.jimmer.buddy.lsp.document.DtoDocument
+import cn.enaium.jimmer.buddy.lsp.utility.copy
 import cn.enaium.jimmer.buddy.lsp.utility.overlaps
 import cn.enaium.jimmer.buddy.lsp.utility.range
 import cn.enaium.jimmer.buddy.project.structure.Project
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.future.future
-import org.eclipse.lsp4j.CodeLens
-import org.eclipse.lsp4j.Command
 import org.eclipse.lsp4j.DefinitionParams
 import org.eclipse.lsp4j.Location
 import org.eclipse.lsp4j.LocationLink
@@ -61,18 +60,34 @@ class DocumentDefinitionService(val project: Project, val documentManager: Docum
                         locations.add(Location(document.type.classNode.path.toUri().toString(), range))
                     }
                 }
-            }
-
-            findCursor?.findParent<DtoParser.DtoTypeContext>()?.name?.also {
+            } ?: findCursor?.findParent<DtoParser.ImportStatementContext>()?.also {
+                it.importedType().isNotEmpty() && return@also
+                val qualifiedName = it.qualifiedName()
+                val range = qualifiedName.parts.lastOrNull()?.range() ?: return@also
+                if (range.overlaps(params.position)) {
+                    project.environment.getIndex().findClass(qualifiedName.text)?.also {
+                        locations.add(Location(it.path.toUri().copy("jar").toString(), range))
+                    }
+                }
+            } ?: findCursor?.findParent<DtoParser.ImportedTypeContext>()?.also {
+                val qualifiedName = it.findParent<DtoParser.ImportStatementContext>()?.qualifiedName() ?: return@also
+                val range = it.name.range()
+                if (range.overlaps(params.position)) {
+                    project.environment.getIndex().findClass("${qualifiedName.text}.${it.name}")?.also {
+                        locations.add(Location(it.path.toUri().toString(), range))
+                    }
+                }
+            } ?: findCursor?.findParent<DtoParser.DtoTypeContext>()?.name?.also {
                 val range = it.range()
                 if (range.overlaps(params.position)) {
                     val packageName = document.cst.exportStatement()?.packageParts()?.qualifiedName()?.text
                         ?: document.type?.packageName?.let { "$it.dto" }
                         ?: return@also
 
-                    val buildDirectory = project.environment.modules.find {
-                        URI.create(params.textDocument.uri).toPath().startsWith(it.directory)
-                    }?.buildDirectory ?: return@also
+                    val buildDirectory =
+                        project.environment.modules.sortedByDescending { it.directory.nameCount }.find {
+                            URI.create(params.textDocument.uri).toPath().startsWith(it.directory)
+                        }?.buildDirectory ?: return@also
 
                     if (project.environment.isKotlinProject) {
                         (buildDirectory / "generated/ksp").takeIf { it.exists() }?.listDirectoryEntries()

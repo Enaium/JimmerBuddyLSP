@@ -14,21 +14,13 @@
  * limitations under the License.
  */
 
-package cn.enaium.jimmer.buddy.lsp.service
+package cn.enaium.jimmer.buddy.lsp.utility
 
-import org.eclipse.lsp4j.DidChangeConfigurationParams
-import org.eclipse.lsp4j.DidChangeWatchedFilesParams
-import org.eclipse.lsp4j.services.WorkspaceService
+import java.net.URI
 
 /**
  * @author Enaium
  */
-open class WorkspaceServiceAdapter : WorkspaceService {
-    override fun didChangeConfiguration(params: DidChangeConfigurationParams?) {
-
-    }
-
-    override fun didChangeWatchedFiles(params: DidChangeWatchedFilesParams?) {
-
-    }
+fun URI.copy(scheme: String): URI {
+    return URI.create("$scheme${this.toString().substring(this.scheme.length)}")
 }

@@ -22,7 +22,6 @@ import cn.enaium.jimmer.buddy.dto.lang.utility.PropType
 import cn.enaium.jimmer.buddy.dto.lang.utility.findPropTrace
 import cn.enaium.jimmer.buddy.dto.lang.utility.type
 import cn.enaium.jimmer.buddy.lang.parser.entity.type.ClassType
-import cn.enaium.jimmer.buddy.lang.parser.node.AnnotationClassNode
 import cn.enaium.jimmer.buddy.lsp.document.DocumentManager
 import cn.enaium.jimmer.buddy.lsp.document.DtoDocument
 import cn.enaium.jimmer.buddy.project.structure.Project

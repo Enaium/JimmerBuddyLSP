@@ -10,12 +10,13 @@ byteBuddy = "1.18.8"
 kotlinpoet = "2.2.0"
 javapoet = "1.13.0"
 jspecify = "1.0.0"
-jimmer = "0.10.7"
+jimmer = "0.10.10"
 gradle = "9.5.0"
 sqlite = "3.53.1.0"
 treeSitter = "0.26.6"
 treeSitterJava = "0.23.5"
 treeSitterKotlin = "0.3.8.1"
+logback = "1.5.34"
 
 [libraries]
 lsp4j = { module = "org.eclipse.lsp4j:org.eclipse.lsp4j", version.ref = "lsp4j" }
@@ -38,6 +39,7 @@ sqlite = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite" }
 tree-sitter = { module = "io.github.bonede:tree-sitter", version.ref = "treeSitter" }
 tree-sitter-java = { module = "io.github.bonede:tree-sitter-java", version.ref = "treeSitterJava" }
 tree-sitter-kotlin = { module = "io.github.bonede:tree-sitter-kotlin", version.ref = "treeSitterKotlin" }
+logback = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

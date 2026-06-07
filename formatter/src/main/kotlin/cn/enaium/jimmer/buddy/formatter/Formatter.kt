@@ -45,6 +45,9 @@ class Formatter(private val tokens: List<Token>) {
                 is SpaceBuilder.TokenAndRuleBetween -> {
                     ruleInstances?.let { processTokenAndRuleBetween(snapshot, model, builder.spaceToken, it) }
                 }
+                is SpaceBuilder.RuleAndTokenBetween -> {
+                    ruleInstances?.let { processRuleAndTokenBetween(snapshot, model, builder.spaceToken, it) }
+                }
                 is SpaceBuilder.RuleAndRuleBetween -> {
                     ruleInstances?.let { processRuleAndRuleBetween(snapshot, model, builder.spaceToken, it) }
                 }
@@ -143,6 +146,27 @@ class Formatter(private val tokens: List<Token>) {
             val count = countSpacesBetween(result, token, ruleStart, spaceToken)
             if (count != model.spaceCount) {
                 adjustCount(result, token, ruleStart, spaceToken, count, model.spaceCount)
+            }
+        }
+    }
+
+    private fun processRuleAndTokenBetween(
+        snapshot: List<Token>,
+        model: SpaceBuilder.RuleAndTokenBetween,
+        spaceToken: Int,
+        ruleInstances: Map<Int, List<IntRange>>
+    ) {
+        val instances = ruleInstances[model.ruleIndex] ?: return
+        for (instance in instances) {
+            val ruleEnd = snapshot.find { it.tokenIndex == instance.last } ?: continue
+            val nextToken = snapshot
+                .filter { it.tokenIndex > instance.last && it.type == model.token }
+                .minByOrNull { it.tokenIndex } ?: continue
+            // Preserve cross-line spacing (indentation)
+            if (ruleEnd.line < nextToken.line) continue
+            val count = countSpacesBetween(result, ruleEnd, nextToken, spaceToken)
+            if (count != model.spaceCount) {
+                adjustCount(result, ruleEnd, nextToken, spaceToken, count, model.spaceCount)
             }
         }
     }
@@ -311,8 +335,11 @@ class Formatter(private val tokens: List<Token>) {
                 if (idx + 1 in blockCommentLines) {
                     // Preserve block comment continuation line alignment
                     val leadingSpaces = line.takeWhile { it == ' ' }.length
-                    val toRemove = minOf(leadingSpaces, depth * 4)
-                    indent + line.substring(toRemove)
+                    if (leadingSpaces >= depth * 4) {
+                        indent + line.substring(depth * 4)
+                    } else {
+                        indent + line
+                    }
                 } else {
                     val trimmed = line.trimStart()
                     if (trimmed.isNotEmpty()) indent + trimmed else ""

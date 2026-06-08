@@ -16,7 +16,6 @@
 
 package cn.enaium.jimmer.buddy.project.structure.jackson
 
-import cn.enaium.jimmer.buddy.lang.parser.node.MemberNode
 import cn.enaium.jimmer.buddy.lang.parser.node.MethodNode
 import cn.enaium.jimmer.buddy.lang.parser.node.PropertyNode
 import com.fasterxml.jackson.annotation.JsonSubTypes

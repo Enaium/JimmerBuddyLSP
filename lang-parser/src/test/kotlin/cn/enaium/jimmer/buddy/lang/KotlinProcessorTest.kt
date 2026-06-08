@@ -22,10 +22,7 @@ import cn.enaium.jimmer.buddy.lang.parser.node.InterfaceNode
 import cn.enaium.jimmer.buddy.lang.parser.node.MethodNode
 import cn.enaium.jimmer.buddy.lang.parser.processor.KotlinSourceProcessor
 import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertIterableEquals
-import org.junit.jupiter.api.Assertions.assertNotNull
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import kotlin.io.path.Path
 import kotlin.io.path.div

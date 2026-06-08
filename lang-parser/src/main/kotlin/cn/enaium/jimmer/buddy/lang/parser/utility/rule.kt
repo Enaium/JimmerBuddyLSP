@@ -17,7 +17,6 @@
 package cn.enaium.jimmer.buddy.lang.parser.utility
 
 import org.antlr.v4.runtime.ParserRuleContext
-import org.antlr.v4.runtime.RuleContext
 
 /**
  * @author Enaium

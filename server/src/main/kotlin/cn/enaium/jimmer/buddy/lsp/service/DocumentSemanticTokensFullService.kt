@@ -28,10 +28,7 @@ import kotlinx.coroutines.future.future
 import org.antlr.v4.runtime.Token
 import org.eclipse.lsp4j.SemanticTokens
 import org.eclipse.lsp4j.SemanticTokensParams
-import java.net.URI
 import java.util.concurrent.CompletableFuture
-import kotlin.io.path.extension
-import kotlin.io.path.toPath
 
 /**
  * @author Enaium
@@ -41,12 +38,11 @@ class DocumentSemanticTokensFullService(val documentManager: DocumentManager) : 
     private val tokenToType = mutableListOf<Pair<Token, SemanticType>>()
 
     override fun semanticTokensFull(params: SemanticTokensParams): CompletableFuture<SemanticTokens> {
-        tokenToType.clear()
-        val path = URI.create(params.textDocument.uri).toPath()
-        path.extension != "dto" && return CompletableFuture.completedFuture(SemanticTokens())
-        val document = documentManager.getDocument(params.textDocument.uri) as? DtoDocument
-            ?: return CompletableFuture.completedFuture(SemanticTokens())
         return CoroutineScope(Dispatchers.Default).future {
+            tokenToType.clear()
+            val document = documentManager.getDocument(params.textDocument.uri) as? DtoDocument
+                ?: return@future SemanticTokens()
+
             document.token.tokens.forEach { token ->
                 when (token.type) {
                     DtoLexer.DocComment, DtoLexer.BlockComment, DtoLexer.LineComment -> {

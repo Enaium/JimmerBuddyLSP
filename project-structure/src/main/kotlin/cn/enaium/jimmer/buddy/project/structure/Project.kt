@@ -16,8 +16,6 @@
 
 package cn.enaium.jimmer.buddy.project.structure
 
-import java.nio.file.Path
-
 /**
  * @author Enaium
  */

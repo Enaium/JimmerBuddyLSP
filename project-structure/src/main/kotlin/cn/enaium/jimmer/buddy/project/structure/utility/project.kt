@@ -20,7 +20,6 @@ import java.nio.file.Path
 import kotlin.io.path.div
 import kotlin.io.path.exists
 import kotlin.io.path.isDirectory
-import kotlin.io.path.name
 
 /**
  * @author Enaium

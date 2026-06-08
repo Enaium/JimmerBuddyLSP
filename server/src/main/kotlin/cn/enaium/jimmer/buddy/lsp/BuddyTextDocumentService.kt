@@ -17,16 +17,7 @@
 package cn.enaium.jimmer.buddy.lsp
 
 import cn.enaium.jimmer.buddy.lsp.document.DocumentManager
-import cn.enaium.jimmer.buddy.lsp.service.DocumentCodeLensService
-import cn.enaium.jimmer.buddy.lsp.service.DocumentCompletionService
-import cn.enaium.jimmer.buddy.lsp.service.DocumentDefinitionService
-import cn.enaium.jimmer.buddy.lsp.service.DocumentFoldingRangeService
-import cn.enaium.jimmer.buddy.lsp.service.DocumentFormattingService
-import cn.enaium.jimmer.buddy.lsp.service.DocumentHoverService
-import cn.enaium.jimmer.buddy.lsp.service.DocumentSemanticTokensFullService
-import cn.enaium.jimmer.buddy.lsp.service.DtoDocumentSyncService
-import cn.enaium.jimmer.buddy.lsp.service.JavaDocumentSyncService
-import cn.enaium.jimmer.buddy.lsp.service.KotlinDocumentSyncService
+import cn.enaium.jimmer.buddy.lsp.service.*
 import cn.enaium.jimmer.buddy.project.structure.Project
 import org.eclipse.lsp4j.*
 import org.eclipse.lsp4j.jsonrpc.messages.Either

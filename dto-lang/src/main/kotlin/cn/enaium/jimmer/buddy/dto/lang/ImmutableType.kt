@@ -24,7 +24,6 @@ import org.babyfish.jimmer.sql.Embeddable
 import org.babyfish.jimmer.sql.Entity
 import org.babyfish.jimmer.sql.Id
 import org.babyfish.jimmer.sql.MappedSuperclass
-import kotlin.collections.iterator
 
 /**
  * @author Enaium

@@ -1,6 +1,6 @@
 allprojects {
     group = "cn.enaium.jimmer.buddy.lsp"
-    version = "0.1.0"
+    version = rootProject.properties["version"].toString()
 
     repositories {
         mavenCentral()

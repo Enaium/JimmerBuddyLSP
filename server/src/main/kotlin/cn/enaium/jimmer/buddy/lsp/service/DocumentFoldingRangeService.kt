@@ -16,6 +16,7 @@
 
 package cn.enaium.jimmer.buddy.lsp.service
 
+import cn.enaium.jimmer.buddy.dto.lang.DtoLexer
 import cn.enaium.jimmer.buddy.dto.lang.DtoParser
 import cn.enaium.jimmer.buddy.lsp.document.DocumentManager
 import cn.enaium.jimmer.buddy.lsp.document.DtoDocument
@@ -27,10 +28,7 @@ import org.eclipse.lsp4j.FoldingRange
 import org.eclipse.lsp4j.FoldingRangeKind
 import org.eclipse.lsp4j.FoldingRangeRequestParams
 import org.eclipse.lsp4j.Range
-import java.net.URI
 import java.util.concurrent.CompletableFuture
-import kotlin.io.path.extension
-import kotlin.io.path.toPath
 
 /**
  * @author Enaium
@@ -39,13 +37,16 @@ class DocumentFoldingRangeService(val documentManager: DocumentManager) : Docume
     private val ranges = mutableListOf<Range>()
 
     override fun foldingRange(params: FoldingRangeRequestParams): CompletableFuture<List<FoldingRange>> {
-        ranges.clear()
-        val path = URI.create(params.textDocument.uri).toPath()
-        path.extension != "dto" && return CompletableFuture.completedFuture(emptyList())
-        val document = documentManager.getDocument(params.textDocument.uri) as? DtoDocument
-            ?: return CompletableFuture.completedFuture(emptyList<FoldingRange>())
         return CoroutineScope(Dispatchers.Default).future {
+            ranges.clear()
+            val document = documentManager.getDocument(params.textDocument.uri) as? DtoDocument
+                ?: return@future emptyList()
             dto(document.cst)
+            document.token.tokens.forEach { token ->
+                if (token.type in listOf(DtoLexer.DocComment, DtoLexer.BlockComment)) {
+                    ranges.add(token.range())
+                }
+            }
             ranges.map {
                 FoldingRange(it.start.line, it.end.line - 1).apply {
                     kind = FoldingRangeKind.Region

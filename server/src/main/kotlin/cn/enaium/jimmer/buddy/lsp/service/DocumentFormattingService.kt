@@ -23,72 +23,72 @@ import cn.enaium.jimmer.buddy.formatter.SpaceBuilder
 import cn.enaium.jimmer.buddy.lsp.document.DocumentManager
 import cn.enaium.jimmer.buddy.lsp.document.DtoDocument
 import cn.enaium.jimmer.buddy.lsp.utility.position
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.future.future
 import org.antlr.v4.runtime.ParserRuleContext
 import org.eclipse.lsp4j.DocumentFormattingParams
 import org.eclipse.lsp4j.Range
 import org.eclipse.lsp4j.TextEdit
-import java.net.URI
 import java.util.concurrent.CompletableFuture
-import kotlin.io.path.extension
-import kotlin.io.path.toPath
 
 /**
  * @author Enaium
  */
 class DocumentFormattingService(val documentManager: DocumentManager) : DocumentServiceAdapter() {
     override fun formatting(params: DocumentFormattingParams): CompletableFuture<List<TextEdit>> {
-        val path = URI.create(params.textDocument.uri).toPath()
-        path.extension != "dto" && return CompletableFuture.completedFuture(emptyList())
-        val document = documentManager.getDocument(params.textDocument.uri) as? DtoDocument
-            ?: return CompletableFuture.completedFuture(emptyList())
+        return CoroutineScope(Dispatchers.Default).future {
+            val document = documentManager.getDocument(params.textDocument.uri) as? DtoDocument
+                ?: return@future emptyList()
 
-        val tokens = document.token.tokens
-        val cst = document.cst
+            val tokens = document.token.tokens
+            val cst = document.cst
 
-        val ruleInstances = mutableMapOf<Int, MutableList<IntRange>>()
-        fun collectRuleInstances(ctx: ParserRuleContext) {
-            val ruleIndex = ctx.ruleIndex
-            if (ruleIndex >= 0) {
-                ruleInstances.computeIfAbsent(ruleIndex) { mutableListOf() }
-                    .add(ctx.start.tokenIndex..ctx.stop.tokenIndex)
-            }
-            for (i in 0 until ctx.childCount) {
-                val child = ctx.getChild(i)
-                if (child is ParserRuleContext) {
-                    collectRuleInstances(child)
+            val ruleInstances = mutableMapOf<Int, MutableList<IntRange>>()
+            fun collectRuleInstances(ctx: ParserRuleContext) {
+                val ruleIndex = ctx.ruleIndex
+                if (ruleIndex >= 0) {
+                    ruleInstances.computeIfAbsent(ruleIndex) { mutableListOf() }
+                        .add(ctx.start.tokenIndex..ctx.stop.tokenIndex)
+                }
+                for (i in 0 until ctx.childCount) {
+                    val child = ctx.getChild(i)
+                    if (child is ParserRuleContext) {
+                        collectRuleInstances(child)
+                    }
                 }
             }
-        }
-        collectRuleInstances(cst)
+            collectRuleInstances(cst)
 
-        val formatted = Formatter(tokens).process(
-            SpaceBuilder(DtoLexer.WhiteSpace, blockCommentTokens = setOf(DtoLexer.DocComment, DtoLexer.BlockComment))
-                .around(DtoLexer.DOT, 0)
-                .around(DtoLexer.COMMA, 0, 1)
-                .around(DtoLexer.COLON, 0, 1)
-                .around(DtoLexer.SEMICOLON, 0, 1)
-                .around(DtoLexer.RIGHT_ARROW, 1)
-                .around(DtoLexer.EQUAL, 1)
-                .around(DtoLexer.LEFT_PARENTHESIS, 0)
-                .around(DtoLexer.RIGHT_PARENTHESIS, 0)
-                .around(DtoLexer.AT, 0)
-                .around(DtoLexer.HASH, 0)
-                .between(DtoLexer.RIGHT_PARENTHESIS, DtoLexer.AS, 1)
-                .between(DtoLexer.RIGHT_ARROW, DtoLexer.PACKAGE, 1)
-                .between(DtoLexer.AS, DtoLexer.LEFT_PARENTHESIS, 0)
-                .ruleAround(DtoParser.RULE_macro, 0)
-                .tokenAndRuleBetween(DtoLexer.Identifier, DtoParser.RULE_dtoBody, 1)
-                .tokenAndRuleBetween(DtoLexer.EXPORT, DtoParser.RULE_typeParts, 1)
-                .tokenAndRuleBetween(DtoLexer.PACKAGE, DtoParser.RULE_packageParts, 1)
-                .ruleAndRuleBetween(DtoParser.RULE_explicitProp, DtoParser.RULE_dtoBody, 1)
-                .ruleAndTokenBetween(DtoParser.RULE_macro, DtoLexer.MINUS, 1)
-                .indent(DtoParser.RULE_dtoBody)
-                .indent(DtoParser.RULE_aliasGroupBody)
-                .indent(DtoParser.RULE_enumBody),
-            ruleInstances = ruleInstances
-        )
-
-        return CompletableFuture.completedFuture(
+            val formatted = Formatter(tokens).process(
+                SpaceBuilder(
+                    DtoLexer.WhiteSpace,
+                    blockCommentTokens = setOf(DtoLexer.DocComment, DtoLexer.BlockComment)
+                )
+                    .around(DtoLexer.DOT, 0)
+                    .around(DtoLexer.COMMA, 0, 1)
+                    .around(DtoLexer.COLON, 0, 1)
+                    .around(DtoLexer.SEMICOLON, 0, 1)
+                    .around(DtoLexer.RIGHT_ARROW, 1)
+                    .around(DtoLexer.EQUAL, 1)
+                    .around(DtoLexer.LEFT_PARENTHESIS, 0)
+                    .around(DtoLexer.RIGHT_PARENTHESIS, 0)
+                    .around(DtoLexer.AT, 0)
+                    .around(DtoLexer.HASH, 0)
+                    .between(DtoLexer.RIGHT_PARENTHESIS, DtoLexer.AS, 1)
+                    .between(DtoLexer.RIGHT_ARROW, DtoLexer.PACKAGE, 1)
+                    .between(DtoLexer.AS, DtoLexer.LEFT_PARENTHESIS, 0)
+                    .ruleAround(DtoParser.RULE_macro, 0)
+                    .tokenAndRuleBetween(DtoLexer.Identifier, DtoParser.RULE_dtoBody, 1)
+                    .tokenAndRuleBetween(DtoLexer.EXPORT, DtoParser.RULE_typeParts, 1)
+                    .tokenAndRuleBetween(DtoLexer.PACKAGE, DtoParser.RULE_packageParts, 1)
+                    .ruleAndRuleBetween(DtoParser.RULE_explicitProp, DtoParser.RULE_dtoBody, 1)
+                    .ruleAndTokenBetween(DtoParser.RULE_macro, DtoLexer.MINUS, 1)
+                    .indent(DtoParser.RULE_dtoBody)
+                    .indent(DtoParser.RULE_aliasGroupBody)
+                    .indent(DtoParser.RULE_enumBody),
+                ruleInstances = ruleInstances
+            )
             listOf(
                 TextEdit(
                     Range(
@@ -98,6 +98,6 @@ class DocumentFormattingService(val documentManager: DocumentManager) : Document
                     formatted
                 )
             )
-        )
+        }
     }
 }

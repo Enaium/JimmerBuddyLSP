@@ -16,7 +16,6 @@
 
 package cn.enaium.jimmer.buddy.lang.parser.entity.type
 
-import cn.enaium.jimmer.buddy.lang.parser.node.ClassNode
 import org.babyfish.jimmer.sql.EnumItem
 import org.babyfish.jimmer.sql.EnumType
 
@@ -27,12 +26,16 @@ import org.babyfish.jimmer.sql.EnumType
 enum class ClassType {
     @EnumItem(name = "ClassNode")
     CLASS,
+
     @EnumItem(name = "InterfaceNode")
     INTERFACE,
+
     @EnumItem(name = "EnumClassNode")
     ENUM,
+
     @EnumItem(name = "AnnotationNode")
     ANNOTATION,
+
     @EnumItem(name = "DataClassNode")
     DATA
 }

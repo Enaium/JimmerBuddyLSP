@@ -17,17 +17,7 @@
 package cn.enaium.jimmer.buddy.lang.parser.processor
 
 import cn.enaium.jimmer.buddy.lang.parser.index.ClassIndex
-import cn.enaium.jimmer.buddy.lang.parser.node.AnnotationArgumentNode
-import cn.enaium.jimmer.buddy.lang.parser.node.AnnotationClassNode
-import cn.enaium.jimmer.buddy.lang.parser.node.AnnotationEntryNode
-import cn.enaium.jimmer.buddy.lang.parser.node.ClassNode
-import cn.enaium.jimmer.buddy.lang.parser.node.ClassTypeNode
-import cn.enaium.jimmer.buddy.lang.parser.node.EnumClassNode
-import cn.enaium.jimmer.buddy.lang.parser.node.EnumEntryNode
-import cn.enaium.jimmer.buddy.lang.parser.node.InterfaceNode
-import cn.enaium.jimmer.buddy.lang.parser.node.MethodNode
-import cn.enaium.jimmer.buddy.lang.parser.node.PrimitiveTypeNode
-import cn.enaium.jimmer.buddy.lang.parser.node.TypeNode
+import cn.enaium.jimmer.buddy.lang.parser.node.*
 import cn.enaium.jimmer.buddy.lang.parser.utility.field
 import cn.enaium.jimmer.buddy.lang.parser.utility.text
 import cn.enaium.jimmer.buddy.lang.parser.utility.types
@@ -35,12 +25,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
-import org.treesitter.TSNode
-import org.treesitter.TSParser
-import org.treesitter.TSQuery
-import org.treesitter.TSQueryCursor
-import org.treesitter.TSQueryMatch
-import org.treesitter.TreeSitterJava
+import org.treesitter.*
 import java.nio.file.Path
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap

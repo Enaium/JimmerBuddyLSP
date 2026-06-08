@@ -16,19 +16,10 @@
 
 package cn.enaium.jimmer.buddy.project.structure.index
 
-import cn.enaium.jimmer.buddy.lang.parser.entity.ClassEntity
-import cn.enaium.jimmer.buddy.lang.parser.entity.classNode
-import cn.enaium.jimmer.buddy.lang.parser.entity.path
-import cn.enaium.jimmer.buddy.lang.parser.entity.qualifiedName
-import cn.enaium.jimmer.buddy.lang.parser.entity.type
+import cn.enaium.jimmer.buddy.lang.parser.entity.*
 import cn.enaium.jimmer.buddy.lang.parser.entity.type.ClassType
 import cn.enaium.jimmer.buddy.lang.parser.index.ClassIndex
-import cn.enaium.jimmer.buddy.lang.parser.node.AnnotationClassNode
-import cn.enaium.jimmer.buddy.lang.parser.node.BaseClassNode
-import cn.enaium.jimmer.buddy.lang.parser.node.ClassNode
-import cn.enaium.jimmer.buddy.lang.parser.node.DataClassNode
-import cn.enaium.jimmer.buddy.lang.parser.node.EnumClassNode
-import cn.enaium.jimmer.buddy.lang.parser.node.InterfaceNode
+import cn.enaium.jimmer.buddy.lang.parser.node.*
 import cn.enaium.jimmer.buddy.project.structure.db.sql
 import org.babyfish.jimmer.sql.kt.ast.expression.eq
 import org.babyfish.jimmer.sql.kt.ast.expression.ilike
@@ -69,18 +60,23 @@ class ClassIndexImpl(val path: Path) : ClassIndex {
                 is ClassNode -> {
                     ClassType.CLASS
                 }
+
                 is InterfaceNode -> {
                     ClassType.INTERFACE
                 }
+
                 is EnumClassNode -> {
                     ClassType.ENUM
                 }
+
                 is DataClassNode -> {
                     ClassType.DATA
                 }
+
                 is AnnotationClassNode -> {
                     ClassType.ANNOTATION
                 }
+
                 else -> {
                     throw IllegalArgumentException("Class type ${classNode.qualifiedName} is not supported")
                 }

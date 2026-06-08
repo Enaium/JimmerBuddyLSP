@@ -18,6 +18,7 @@ class KotlinDocumentSyncService(project: Project, documentManager: DocumentManag
         uri: String,
         type: Type
     ) {
+        !uri.startsWith("file") && return
         val path = URI.create(uri).toPath()
         path.extension != "kt" && return
 

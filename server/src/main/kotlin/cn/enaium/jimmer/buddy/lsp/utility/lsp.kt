@@ -19,12 +19,7 @@ package cn.enaium.jimmer.buddy.lsp.utility
 import cn.enaium.jimmer.buddy.lsp.client
 import org.antlr.v4.runtime.ParserRuleContext
 import org.antlr.v4.runtime.Token
-import org.eclipse.lsp4j.Position
-import org.eclipse.lsp4j.ProgressParams
-import org.eclipse.lsp4j.Range
-import org.eclipse.lsp4j.WorkDoneProgressBegin
-import org.eclipse.lsp4j.WorkDoneProgressCreateParams
-import org.eclipse.lsp4j.WorkDoneProgressEnd
+import org.eclipse.lsp4j.*
 import org.eclipse.lsp4j.jsonrpc.messages.Either
 import java.nio.file.Path
 
@@ -86,3 +81,8 @@ suspend fun process(title: String, block: suspend () -> Unit) {
         )
     )
 }
+
+val ZeroRange = Range(
+    Position(0, 0),
+    Position(0, 0)
+)

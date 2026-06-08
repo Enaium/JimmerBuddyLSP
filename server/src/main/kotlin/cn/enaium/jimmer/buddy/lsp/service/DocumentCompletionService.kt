@@ -30,22 +30,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.future.future
 import org.eclipse.lsp4j.*
 import org.eclipse.lsp4j.jsonrpc.messages.Either
-import java.net.URI
 import java.util.concurrent.CompletableFuture
-import kotlin.io.path.extension
-import kotlin.io.path.toPath
 
 /**
  * @author Enaium
  */
 class DocumentCompletionService(val project: Project, val documentManager: DocumentManager) : DocumentServiceAdapter() {
     override fun completion(params: CompletionParams): CompletableFuture<Either<List<CompletionItem>, CompletionList>> {
-        val path = URI.create(params.textDocument.uri).toPath()
-        path.extension != "dto" && return CompletableFuture.completedFuture(Either.forLeft(emptyList()))
-        val document = documentManager.getDocument(params.textDocument.uri) as? DtoDocument
-            ?: return CompletableFuture.completedFuture(Either.forLeft(emptyList()))
         return CoroutineScope(Dispatchers.Default).future {
-
+            val document = documentManager.getDocument(params.textDocument.uri) as? DtoDocument
+                ?: return@future Either.forLeft(emptyList())
             val triggerChar = params.context?.triggerCharacter
 
             return@future when (triggerChar) {

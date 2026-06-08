@@ -24,12 +24,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
-import org.treesitter.TSNode
-import org.treesitter.TSParser
-import org.treesitter.TSQuery
-import org.treesitter.TSQueryCursor
-import org.treesitter.TSQueryMatch
-import org.treesitter.TreeSitterKotlin
+import org.treesitter.*
 import java.nio.file.Path
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap

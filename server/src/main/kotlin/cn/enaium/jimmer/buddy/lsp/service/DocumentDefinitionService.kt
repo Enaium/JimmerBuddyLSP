@@ -21,6 +21,7 @@ import cn.enaium.jimmer.buddy.dto.lang.DtoProcessor
 import cn.enaium.jimmer.buddy.lang.parser.utility.findParent
 import cn.enaium.jimmer.buddy.lsp.document.DocumentManager
 import cn.enaium.jimmer.buddy.lsp.document.DtoDocument
+import cn.enaium.jimmer.buddy.lsp.utility.ZeroRange
 import cn.enaium.jimmer.buddy.lsp.utility.copy
 import cn.enaium.jimmer.buddy.lsp.utility.overlaps
 import cn.enaium.jimmer.buddy.lsp.utility.range
@@ -34,10 +35,7 @@ import org.eclipse.lsp4j.LocationLink
 import org.eclipse.lsp4j.jsonrpc.messages.Either
 import java.net.URI
 import java.util.concurrent.CompletableFuture
-import kotlin.io.path.div
-import kotlin.io.path.exists
-import kotlin.io.path.listDirectoryEntries
-import kotlin.io.path.toPath
+import kotlin.io.path.*
 
 /**
  * @author Enaium
@@ -55,9 +53,8 @@ class DocumentDefinitionService(val project: Project, val documentManager: Docum
 
             findCursor?.findParent<DtoParser.TypePartsContext>()?.qualifiedName()?.parts?.lastOrNull()?.also {
                 if (it.text == document.type?.name) {
-                    val range = it.range()
-                    if (range.overlaps(params.position)) {
-                        locations.add(Location(document.type.classNode.path.toUri().toString(), range))
+                    if (it.range().overlaps(params.position)) {
+                        locations.add(Location(document.type.classNode.path.toUri().toString(), ZeroRange))
                     }
                 }
             } ?: findCursor?.findParent<DtoParser.ImportStatementContext>()?.also {
@@ -65,21 +62,31 @@ class DocumentDefinitionService(val project: Project, val documentManager: Docum
                 val qualifiedName = it.qualifiedName()
                 val range = qualifiedName.parts.lastOrNull()?.range() ?: return@also
                 if (range.overlaps(params.position)) {
-                    project.environment.getIndex().findClass(qualifiedName.text)?.also {
-                        locations.add(Location(it.path.toUri().copy("jar").toString(), range))
+                    project.environment.getIndex().findClass(qualifiedName.text)?.also { classNode ->
+                        locations.add(Location(classNode.path.let { path ->
+                            if (path.any { part -> part.extension == "jar!" }) {
+                                path.toUri().copy("jar")
+                            } else {
+                                path.toUri()
+                            }
+                        }.toString(), ZeroRange))
                     }
                 }
             } ?: findCursor?.findParent<DtoParser.ImportedTypeContext>()?.also {
                 val qualifiedName = it.findParent<DtoParser.ImportStatementContext>()?.qualifiedName() ?: return@also
-                val range = it.name.range()
-                if (range.overlaps(params.position)) {
-                    project.environment.getIndex().findClass("${qualifiedName.text}.${it.name}")?.also {
-                        locations.add(Location(it.path.toUri().toString(), range))
+                if (it.name.range().overlaps(params.position)) {
+                    project.environment.getIndex().findClass("${qualifiedName.text}.${it.name}")?.also { classNode ->
+                        locations.add(Location(classNode.path.let { path ->
+                            if (path.any { part -> part.extension == "jar!" }) {
+                                path.toUri().copy("jar")
+                            } else {
+                                path.toUri()
+                            }
+                        }.toString(), ZeroRange))
                     }
                 }
             } ?: findCursor?.findParent<DtoParser.DtoTypeContext>()?.name?.also {
-                val range = it.range()
-                if (range.overlaps(params.position)) {
+                if (it.range().overlaps(params.position)) {
                     val packageName = document.cst.exportStatement()?.packageParts()?.qualifiedName()?.text
                         ?: document.type?.packageName?.let { "$it.dto" }
                         ?: return@also
@@ -96,7 +103,7 @@ class DocumentDefinitionService(val project: Project, val documentManager: Docum
                                     val generated =
                                         entry / "kotlin/${packageName.replace('.', '/')}/${dtoType.name.text}.kt"
                                     if (generated.exists()) {
-                                        locations.add(Location(generated.toUri().toString(), range))
+                                        locations.add(Location(generated.toUri().toString(), ZeroRange))
                                     }
                                 }
                             }
@@ -106,7 +113,7 @@ class DocumentDefinitionService(val project: Project, val documentManager: Docum
                                 document.cst.dtoType().forEach { dtoType ->
                                     val generated = entry / "${packageName.replace('.', '/')}/${dtoType.name.text}.java"
                                     if (generated.exists()) {
-                                        locations.add(Location(generated.toUri().toString(), range))
+                                        locations.add(Location(generated.toUri().toString(), ZeroRange))
                                     }
                                 }
                             }

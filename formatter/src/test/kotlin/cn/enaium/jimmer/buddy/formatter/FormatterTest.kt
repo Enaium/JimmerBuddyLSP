@@ -21,7 +21,6 @@ import cn.enaium.jimmer.buddy.dto.lang.DtoParser
 import org.antlr.v4.runtime.CharStreams
 import org.antlr.v4.runtime.CommonTokenStream
 import org.antlr.v4.runtime.ParserRuleContext
-import org.antlr.v4.runtime.Token
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import kotlin.io.path.Path

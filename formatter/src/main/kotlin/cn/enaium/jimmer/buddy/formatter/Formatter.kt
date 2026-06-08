@@ -39,18 +39,23 @@ class Formatter(private val tokens: List<Token>) {
                 is SpaceBuilder.RuleAround -> {
                     ruleInstances?.let { processRuleAround(snapshot, model, builder.spaceToken, it) }
                 }
+
                 is SpaceBuilder.RuleBetween -> {
                     ruleInstances?.let { processRuleBetween(snapshot, model, builder.spaceToken, it) }
                 }
+
                 is SpaceBuilder.TokenAndRuleBetween -> {
                     ruleInstances?.let { processTokenAndRuleBetween(snapshot, model, builder.spaceToken, it) }
                 }
+
                 is SpaceBuilder.RuleAndTokenBetween -> {
                     ruleInstances?.let { processRuleAndTokenBetween(snapshot, model, builder.spaceToken, it) }
                 }
+
                 is SpaceBuilder.RuleAndRuleBetween -> {
                     ruleInstances?.let { processRuleAndRuleBetween(snapshot, model, builder.spaceToken, it) }
                 }
+
                 is SpaceBuilder.Indent -> indentModels.add(model)
             }
         }

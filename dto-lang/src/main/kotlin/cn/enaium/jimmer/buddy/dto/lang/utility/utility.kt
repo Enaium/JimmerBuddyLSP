@@ -17,7 +17,6 @@
 package cn.enaium.jimmer.buddy.dto.lang.utility
 
 import com.squareup.javapoet.TypeName
-import kotlin.text.iterator
 
 /**
  * @author Enaium

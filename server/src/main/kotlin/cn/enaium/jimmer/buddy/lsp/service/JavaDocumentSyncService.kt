@@ -18,6 +18,7 @@ class JavaDocumentSyncService(project: Project, documentManager: DocumentManager
         uri: String,
         type: Type
     ) {
+        !uri.startsWith("file") && return
         val path = URI.create(uri).toPath()
         path.extension != "java" && return
 

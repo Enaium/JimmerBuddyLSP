@@ -14,27 +14,30 @@
  * limitations under the License.
  */
 
-package cn.enaium.jimmer.buddy.lsp.service
+package cn.enaium.jimmer.buddy.lsp.service.sync
 
 import cn.enaium.jimmer.buddy.lsp.document.DocumentManager
-import cn.enaium.jimmer.buddy.lsp.utility.DelayedExecutionQueue
+import cn.enaium.jimmer.buddy.lsp.service.DocumentServiceAdapter
+import cn.enaium.jimmer.buddy.lsp.service.sync.AbstractDocumentSyncService.Type
 import cn.enaium.jimmer.buddy.project.structure.Project
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import org.eclipse.lsp4j.DidChangeTextDocumentParams
 import org.eclipse.lsp4j.DidCloseTextDocumentParams
 import org.eclipse.lsp4j.DidOpenTextDocumentParams
 import org.eclipse.lsp4j.DidSaveTextDocumentParams
-import java.nio.file.Path
-import kotlin.io.path.div
-import kotlin.io.path.name
-import kotlin.io.path.relativeTo
 
 /**
  * @author Enaium
  */
-abstract class DocumentSyncService(val project: Project, val documentManager: DocumentManager) :
-    DocumentServiceAdapter() {
+class DocumentSyncService(val project: Project, val documentManager: DocumentManager) : DocumentServiceAdapter() {
 
-    val deq = DelayedExecutionQueue()
+    private val services = listOf(
+        JavaDocumentSyncService(project, documentManager),
+        KotlinDocumentSyncService(project, documentManager),
+        DtoDocumentSyncService(project, documentManager),
+    )
 
     override fun didOpen(params: DidOpenTextDocumentParams) {
         try {
@@ -44,7 +47,9 @@ abstract class DocumentSyncService(val project: Project, val documentManager: Do
         }
         val content = params.textDocument.text
         content.isBlank() && return
-        validate(content, params.textDocument.uri, Type.OPEN)
+        CoroutineScope(Dispatchers.Default).launch {
+            validate(content, params.textDocument.uri, Type.OPEN)
+        }
     }
 
     override fun didChange(params: DidChangeTextDocumentParams) {
@@ -55,7 +60,9 @@ abstract class DocumentSyncService(val project: Project, val documentManager: Do
         }
         val content = params.contentChanges[0].text
         content.isBlank() && return
-        validate(content, params.textDocument.uri, Type.CHANGE)
+        CoroutineScope(Dispatchers.Default).launch {
+            validate(content, params.textDocument.uri, Type.CHANGE)
+        }
     }
 
     override fun didClose(params: DidCloseTextDocumentParams) {
@@ -70,35 +77,12 @@ abstract class DocumentSyncService(val project: Project, val documentManager: Do
         }
         val content = params.text
         content.isBlank() && return
-        validate(content, params.textDocument.uri, Type.SAVE)
-    }
-
-    abstract fun validate(content: String, uri: String, type: Type)
-
-    enum class Type {
-        OPEN, CHANGE, CLOSE, SAVE
-    }
-
-    fun getGenDirectory(path: Path): Path? {
-        val module =
-            project.environment.modules.sortedByDescending { it.directory.nameCount }
-                .find { path.startsWith(it.directory) }
-                ?: return null
-        val sourceDirectory =
-            module.sourceDirectories.find { path.startsWith(it.parent) }?.relativeTo(module.directory)
-                ?: return null
-        val buildDirectory = module.buildDirectory
-        val main = sourceDirectory.subpath(1, 2).name
-        return when {
-            project.environment.isKotlinProject -> {
-                buildDirectory / "generated/ksp" / main / "kotlin"
-            }
-
-            project.environment.isJavaProject -> {
-                buildDirectory / "generated/sources/annotationProcessor/java" / main
-            }
-
-            else -> null
+        CoroutineScope(Dispatchers.Default).launch {
+            validate(content, params.textDocument.uri, Type.SAVE)
         }
+    }
+
+    suspend fun validate(content: String, uri: String, type: Type) {
+        services.forEach { it.validate(content, uri, type) }
     }
 }

@@ -72,7 +72,7 @@ class BuddyServer : LanguageServer {
                                     UUID.randomUUID().toString(),
                                     "textDocument/completion",
                                     CompletionOptions().apply {
-                                        triggerCharacters = listOf("*", "@", "#")
+                                        triggerCharacters = listOf("*", "@", "#", "!")
                                         completionItem = CompletionItemOptions().apply {
                                             labelDetailsSupport = true
                                         }

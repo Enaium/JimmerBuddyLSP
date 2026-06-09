@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cn.enaium.jimmer.buddy.lsp.service
+package cn.enaium.jimmer.buddy.lsp.service.completion
 
 import cn.enaium.jimmer.buddy.dto.lang.DtoParser
 import cn.enaium.jimmer.buddy.dto.lang.DtoProcessor
@@ -22,33 +22,29 @@ import cn.enaium.jimmer.buddy.dto.lang.utility.PropType
 import cn.enaium.jimmer.buddy.dto.lang.utility.findPropTrace
 import cn.enaium.jimmer.buddy.dto.lang.utility.type
 import cn.enaium.jimmer.buddy.lang.parser.entity.type.ClassType
+import cn.enaium.jimmer.buddy.lang.parser.utility.findParent
 import cn.enaium.jimmer.buddy.lsp.document.DocumentManager
 import cn.enaium.jimmer.buddy.lsp.document.DtoDocument
 import cn.enaium.jimmer.buddy.project.structure.Project
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.future.future
 import org.eclipse.lsp4j.*
-import org.eclipse.lsp4j.jsonrpc.messages.Either
-import java.util.concurrent.CompletableFuture
 
 /**
  * @author Enaium
  */
-class DocumentCompletionService(val project: Project, val documentManager: DocumentManager) : DocumentServiceAdapter() {
-    override fun completion(params: CompletionParams): CompletableFuture<Either<List<CompletionItem>, CompletionList>> {
-        return CoroutineScope(Dispatchers.Default).future {
-            val document = documentManager.getDocument(params.textDocument.uri) as? DtoDocument
-                ?: return@future Either.forLeft(emptyList())
-            val triggerChar = params.context?.triggerCharacter
+class DtoDocumentCompletionService(project: Project, documentManager: DocumentManager) :
+    AbstractDocumentCompletionService(project, documentManager) {
+    override suspend fun completion(params: CompletionParams): List<CompletionItem> {
+        val document = documentManager.getDocument(params.textDocument.uri) as? DtoDocument
+            ?: return emptyList()
+        val triggerChar = params.context?.triggerCharacter
 
-            return@future when (triggerChar) {
-                "*" -> params.star(document)
-                "@" -> params.at(document)
-                "#" -> params.hash(document)
-                null -> params.type(document)
-                else -> null
-            }?.let { Either.forLeft(it) } ?: Either.forLeft(emptyList())
+        return when (triggerChar) {
+            "*" -> params.star(document)
+            "@" -> params.at(document)
+            "#" -> params.hash(document)
+            "!" -> params.exclamation(document)
+            null -> params.type(document)
+            else -> emptyList()
         }
     }
 
@@ -128,6 +124,22 @@ class DocumentCompletionService(val project: Project, val documentManager: Docum
                     description = "macro"
                 }
                 insertText = "#$name"
+                insertTextFormat = InsertTextFormat.Snippet
+            }
+        }
+    }
+
+    fun CompletionParams.exclamation(document: DtoDocument): List<CompletionItem> {
+        val dtoProcessor = DtoProcessor(document.content)
+        dtoProcessor.findCursor(this.position.line, this.position.character)?.findParent<DtoParser.DtoTypeContext>()
+            ?.modifier()?.isNotEmpty() == true && return emptyList()
+        return listOf("where", "orderBy", "filter", "recursion", "fetchType", "limit", "batch", "depth").map { name ->
+            CompletionItem(name).apply {
+                kind = CompletionItemKind.Function
+                labelDetails = CompletionItemLabelDetails().apply {
+                    description = "config"
+                }
+                insertText = "!$name($0)"
                 insertTextFormat = InsertTextFormat.Snippet
             }
         }

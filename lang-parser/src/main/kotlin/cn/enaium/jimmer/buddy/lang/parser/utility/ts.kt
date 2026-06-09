@@ -16,7 +16,7 @@
 
 package cn.enaium.jimmer.buddy.lang.parser.utility
 
-import org.treesitter.TSNode
+import org.treesitter.*
 
 /**
  * @author Enaium
@@ -51,4 +51,38 @@ fun TSNode.types(vararg type: String): List<TSNode> {
         return types
     }
     return types
+}
+
+fun TSNode.parent(): TSNode? {
+    return this.parent?.takeIf { !it.isNull }
+}
+
+fun TSNode.prevNamedSibling(): TSNode? {
+    return this.prevNamedSibling?.takeIf { !it.isNull }
+}
+
+fun TSNode.findParent(type: String): TSNode? {
+    if (this.type == type) {
+        return this
+    }
+
+    val parent = this.parent()
+    while (parent != null) {
+        return parent.findParent(type)
+    }
+    return parent
+}
+
+fun TSNode.query(language: TSLanguage, query: String): List<Pair<String, TSNode>> {
+    val result = mutableListOf<Pair<String, TSNode>>()
+    val query = TSQuery(language, query)
+    val cursor = TSQueryCursor()
+    cursor.exec(query, this)
+    val match = TSQueryMatch()
+    while (cursor.nextMatch(match)) {
+        match.captures.forEach { capture ->
+            result.add(query.getCaptureNameForId(capture.index) to capture.node)
+        }
+    }
+    return result
 }

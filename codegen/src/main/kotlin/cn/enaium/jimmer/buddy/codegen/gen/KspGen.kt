@@ -29,6 +29,7 @@ import org.babyfish.jimmer.ksp.error.ErrorProcessor
 import org.babyfish.jimmer.ksp.immutable.ImmutableProcessor
 import org.babyfish.jimmer.ksp.transactional.TxProcessor
 import org.babyfish.jimmer.ksp.tuple.TypedTupleProcessor
+import org.slf4j.LoggerFactory
 import java.nio.file.Path
 
 /**
@@ -40,6 +41,9 @@ class KspGen(
     genDir: Path,
     options: Map<String, String>
 ) : Gen(projectDir, environment, genDir, options) {
+
+    private val logger = LoggerFactory.getLogger(KspGen::class.java)
+
     fun sourceProcess(genClasses: Set<BaseClassNode>) {
         try {
             val (resolver, environment, sources) = KspProcessor(environment).process(genClasses)
@@ -63,7 +67,7 @@ class KspGen(
                 it.write()
             }
         } catch (e: Throwable) {
-            e.printStackTrace()
+            logger.error("Unable to gen sources", e)
         }
     }
 
@@ -109,7 +113,7 @@ class KspGen(
                     it.write()
                 }
             } catch (e: Throwable) {
-                e.printStackTrace()
+                logger.error("Unable to gen dto", e)
             }
         }
     }

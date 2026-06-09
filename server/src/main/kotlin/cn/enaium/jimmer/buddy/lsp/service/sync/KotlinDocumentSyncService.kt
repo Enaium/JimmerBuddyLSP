@@ -1,9 +1,28 @@
-package cn.enaium.jimmer.buddy.lsp.service
+/*
+ * Copyright 2026 Enaium
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package cn.enaium.jimmer.buddy.lsp.service.sync
 
 import cn.enaium.jimmer.buddy.codegen.gen.KspGen
 import cn.enaium.jimmer.buddy.lang.parser.processor.KotlinSourceProcessor
 import cn.enaium.jimmer.buddy.lsp.document.DocumentManager
+import cn.enaium.jimmer.buddy.lsp.document.KotlinDocument
 import cn.enaium.jimmer.buddy.project.structure.Project
+import org.treesitter.TSParser
+import org.treesitter.TreeSitterKotlin
 import java.net.URI
 import kotlin.io.path.extension
 import kotlin.io.path.toPath
@@ -12,8 +31,8 @@ import kotlin.io.path.toPath
  * @author Enaium
  */
 class KotlinDocumentSyncService(project: Project, documentManager: DocumentManager) :
-    DocumentSyncService(project, documentManager) {
-    override fun validate(
+    AbstractDocumentSyncService(project, documentManager) {
+    override suspend fun validate(
         content: String,
         uri: String,
         type: Type
@@ -21,7 +40,11 @@ class KotlinDocumentSyncService(project: Project, documentManager: DocumentManag
         !uri.startsWith("file") && return
         val path = URI.create(uri).toPath()
         path.extension != "kt" && return
-
+        val parser = TSParser()
+        val language = TreeSitterKotlin()
+        parser.setLanguage(language)
+        val parse = parser.parseString(null, content)
+        documentManager.openOrUpdateDocument(uri, KotlinDocument(content, parse.rootNode))
         when (type) {
             Type.CHANGE -> {
                 deq.schedule("genSource", 2000) {

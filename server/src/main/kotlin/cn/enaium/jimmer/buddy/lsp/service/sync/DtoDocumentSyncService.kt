@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cn.enaium.jimmer.buddy.lsp.service
+package cn.enaium.jimmer.buddy.lsp.service.sync
 
 import cn.enaium.jimmer.buddy.codegen.gen.AptGen
 import cn.enaium.jimmer.buddy.codegen.gen.KspGen
@@ -40,9 +40,9 @@ import kotlin.io.path.*
  * @author Enaium
  */
 class DtoDocumentSyncService(project: Project, documentManager: DocumentManager) :
-    DocumentSyncService(project, documentManager) {
-
-    override fun validate(
+    AbstractDocumentSyncService(project, documentManager) {
+    private val context = Context(project)
+    override suspend fun validate(
         content: String,
         uri: String,
         type: Type
@@ -50,8 +50,6 @@ class DtoDocumentSyncService(project: Project, documentManager: DocumentManager)
         !uri.startsWith("file") && return
         val path = URI.create(uri).toPath()
         path.extension != "dto" && return
-
-        val context = Context(project)
         val baseErrorListener = object : BaseErrorListener() {
             override fun syntaxError(
                 recognizer: Recognizer<*, *>,

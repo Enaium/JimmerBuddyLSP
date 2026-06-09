@@ -26,6 +26,9 @@ dependencies {
     implementation(libs.jspecify)
     implementation(libs.sqlite)
     implementation(libs.logback)
+    implementation(libs.tree.sitter)
+    implementation(libs.tree.sitter.java)
+    implementation(libs.tree.sitter.kotlin)
 }
 
 tasks.test {

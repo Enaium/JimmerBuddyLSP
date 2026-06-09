@@ -1,5 +1,5 @@
 [versions]
-kotlin = "2.3.21"
+kotlin = "2.4.0"
 ksp = "2.3.9"
 shadow = "9.4.1"
 lsp4j = "1.0.0"

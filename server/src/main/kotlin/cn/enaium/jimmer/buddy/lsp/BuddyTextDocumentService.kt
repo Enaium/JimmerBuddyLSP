@@ -18,6 +18,8 @@ package cn.enaium.jimmer.buddy.lsp
 
 import cn.enaium.jimmer.buddy.lsp.document.DocumentManager
 import cn.enaium.jimmer.buddy.lsp.service.*
+import cn.enaium.jimmer.buddy.lsp.service.completion.DocumentCompletionService
+import cn.enaium.jimmer.buddy.lsp.service.sync.DocumentSyncService
 import cn.enaium.jimmer.buddy.project.structure.Project
 import org.eclipse.lsp4j.*
 import org.eclipse.lsp4j.jsonrpc.messages.Either
@@ -32,31 +34,26 @@ class BuddyTextDocumentService(project: Project) : TextDocumentService {
     private val documentCompletionService = DocumentCompletionService(project, documentManager)
     private val documentFoldingRangeService = DocumentFoldingRangeService(documentManager)
     private val documentSemanticTokensFullService = DocumentSemanticTokensFullService(documentManager)
-    private val documentSyncServices =
-        listOf(
-            JavaDocumentSyncService(project, documentManager),
-            KotlinDocumentSyncService(project, documentManager),
-            DtoDocumentSyncService(project, documentManager)
-        )
+    private val documentSyncService = DocumentSyncService(project, documentManager)
     private val documentFormattingService = DocumentFormattingService(documentManager)
     private val documentHoverService = DocumentHoverService(project, documentManager)
     private val documentCodeLensService = DocumentCodeLensService(project, documentManager)
     private val documentDefinitionService = DocumentDefinitionService(project, documentManager)
 
     override fun didOpen(params: DidOpenTextDocumentParams) {
-        documentSyncServices.forEach { it.didOpen(params) }
+        documentSyncService.didOpen(params)
     }
 
     override fun didChange(params: DidChangeTextDocumentParams) {
-        documentSyncServices.forEach { it.didChange(params) }
+        documentSyncService.didChange(params)
     }
 
     override fun didClose(params: DidCloseTextDocumentParams) {
-        documentSyncServices.forEach { it.didClose(params) }
+        documentSyncService.didClose(params)
     }
 
     override fun didSave(params: DidSaveTextDocumentParams) {
-        documentSyncServices.forEach { it.didSave(params) }
+        documentSyncService.didSave(params)
     }
 
     override fun semanticTokensFull(params: SemanticTokensParams): CompletableFuture<SemanticTokens> {

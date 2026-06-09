@@ -30,6 +30,7 @@ import org.babyfish.jimmer.apt.immutable.ImmutableProcessor
 import org.babyfish.jimmer.apt.immutable.meta.ImmutableType
 import org.babyfish.jimmer.apt.transactional.TxProcessor
 import org.babyfish.jimmer.dto.compiler.DtoFile
+import org.slf4j.LoggerFactory
 import java.nio.file.Path
 import javax.annotation.processing.RoundEnvironment
 import javax.lang.model.element.TypeElement
@@ -43,6 +44,9 @@ class AptGen(
     genDir: Path,
     options: Map<String, String>
 ) : Gen(projectDir, environment, genDir, options) {
+
+    private val logger = LoggerFactory.getLogger(AptGen::class.java)
+
     fun sourceProcess(genClasses: Set<BaseClassNode>) {
         try {
             val (pe, rootElements, sources) = AptProcessor(environment).process(genClasses)
@@ -79,7 +83,7 @@ class AptGen(
                 it.write()
             }
         } catch (e: Throwable) {
-            e.printStackTrace()
+            logger.error("Unable to gen sources", e)
         }
         System.gc()
     }
@@ -114,7 +118,7 @@ class AptGen(
                     it.write()
                 }
             } catch (e: Throwable) {
-                e.printStackTrace()
+                logger.error("Unable to generate dto", e)
             }
         }
         System.gc()

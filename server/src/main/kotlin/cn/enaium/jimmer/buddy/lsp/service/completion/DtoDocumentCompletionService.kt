@@ -157,7 +157,7 @@ class DtoDocumentCompletionService(project: Project, documentManager: DocumentMa
             this.position.character
         )
 
-        if (findCursor !is DtoParser.PositivePropContext) {
+        if (findCursor !is DtoParser.PositivePropContext && findCursor !is DtoParser.FuncContext) {
             return emptyList()
         }
 
@@ -178,8 +178,10 @@ class DtoDocumentCompletionService(project: Project, documentManager: DocumentMa
                     description = type.description
                 }
                 if (type == PropType.ASSOCIATION) {
-                    insertText = "${prop.name} { \n\t$0\n}"
-                    insertTextFormat = InsertTextFormat.Snippet
+                    if (findCursor !is DtoParser.FuncContext) {
+                        insertText = "${prop.name} { \n\t$0\n}"
+                        insertTextFormat = InsertTextFormat.Snippet
+                    }
                 } else if (type == PropType.RECURSIVE) {
                     insertText = "${prop.name}*"
                 }

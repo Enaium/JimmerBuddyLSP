@@ -125,7 +125,7 @@ func
     :
     name = (Identifier | NULL)
     (flag = DIVIDE (insensitive = Identifier)? (prefix = POWER)? (suffix = DOLLAR)?)?
-    LEFT_PARENTHESIS prop = Identifier (COMMA prop = Identifier)* COMMA? RIGHT_PARENTHESIS
+    LEFT_PARENTHESIS props += Identifier (COMMA props += Identifier)* COMMA? RIGHT_PARENTHESIS
     ;
 
 positiveProp

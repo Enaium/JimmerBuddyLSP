@@ -28,9 +28,21 @@ fun ParserRuleContext.findPropTrace(): List<String> {
     val trace = mutableListOf<String>()
     var parent: RuleContext? = this.parent
     while (parent != null) {
-        if (parent is DtoParser.PositivePropContext) {
-            parent.prop?.text?.also {
-                trace.add(it)
+        when (parent) {
+            is DtoParser.PositivePropContext -> {
+                parent.prop?.text?.also {
+                    trace.add(it)
+                }
+            }
+
+            is DtoParser.DtoBodyContext -> {
+                (parent.parent?.getChild(0) as? DtoParser.FuncContext)?.also { ifuncContext ->
+                    if (ifuncContext.name.text in listOf("flat")) {
+                        ifuncContext.props?.firstOrNull()?.text?.also {
+                            trace.add(it)
+                        }
+                    }
+                }
             }
         }
         parent = parent.parent

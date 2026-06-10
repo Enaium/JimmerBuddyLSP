@@ -25,6 +25,7 @@ import cn.enaium.jimmer.buddy.project.structure.Project
 import org.babyfish.jimmer.Formula
 import org.babyfish.jimmer.sql.*
 import org.eclipse.lsp4j.CompletionItem
+import org.eclipse.lsp4j.CompletionItemKind
 import org.eclipse.lsp4j.CompletionParams
 import org.treesitter.TSNode
 import org.treesitter.TSPoint
@@ -99,7 +100,9 @@ class KotlinDocumentCompletionService(project: Project, documentManager: Documen
             }
         }
         project.dto.ofType(qualifiedName)?.properties[propertyName]?.targetType?.properties?.keys?.forEach {
-            result.add(CompletionItem(it))
+            result.add(CompletionItem(it).apply {
+                kind = CompletionItemKind.Property
+            })
         }
         return result
     }
@@ -110,7 +113,9 @@ class KotlinDocumentCompletionService(project: Project, documentManager: Documen
         if (this.parent()?.type == "value_argument") {
             if (this.prevNamedSibling().let { it == null || it.text(document.content) == "value" }) {
                 project.dto.ofType(qualifiedName)?.properties?.keys?.filter { it != propertyName }?.forEach {
-                    result.add(CompletionItem(it))
+                    result.add(CompletionItem(it).apply {
+                        kind = CompletionItemKind.Property
+                    })
                 }
             }
         }
@@ -123,7 +128,9 @@ class KotlinDocumentCompletionService(project: Project, documentManager: Documen
         if (this.parent()?.parent()?.type == "value_argument") {
             if (this.parent()?.prevNamedSibling().let { it == null || it.text(document.content) == "value" }) {
                 project.dto.ofType(qualifiedName)?.properties[propertyName]?.targetType?.properties?.keys?.forEach {
-                    result.add(CompletionItem(it))
+                    result.add(CompletionItem(it).apply {
+                        kind = CompletionItemKind.Property
+                    })
                 }
             }
         }
@@ -144,7 +151,9 @@ class KotlinDocumentCompletionService(project: Project, documentManager: Documen
 
         if (trace.size == 1) {
             project.dto.ofType(qualifiedName)?.properties?.keys?.filter { it != propertyName }?.forEach {
-                result.add(CompletionItem(it))
+                result.add(CompletionItem(it).apply {
+                    kind = CompletionItemKind.Property
+                })
             }
         } else {
             var lastImmutableType: ImmutableType? = null
@@ -154,7 +163,9 @@ class KotlinDocumentCompletionService(project: Project, documentManager: Documen
                 }
             }
             lastImmutableType?.properties?.keys?.filter { it != propertyName }?.forEach {
-                result.add(CompletionItem(it))
+                result.add(CompletionItem(it).apply {
+                    kind = CompletionItemKind.Property
+                })
             }
         }
         return result

@@ -16,17 +16,154 @@
 
 package cn.enaium.jimmer.buddy.lsp.service.completion
 
+import cn.enaium.jimmer.buddy.dto.lang.ImmutableType
+import cn.enaium.jimmer.buddy.lang.parser.utility.*
 import cn.enaium.jimmer.buddy.lsp.document.DocumentManager
+import cn.enaium.jimmer.buddy.lsp.document.JavaDocument
+import cn.enaium.jimmer.buddy.lsp.utility.dto
 import cn.enaium.jimmer.buddy.project.structure.Project
+import org.babyfish.jimmer.Formula
+import org.babyfish.jimmer.sql.*
 import org.eclipse.lsp4j.CompletionItem
+import org.eclipse.lsp4j.CompletionItemKind
 import org.eclipse.lsp4j.CompletionParams
+import org.treesitter.TSNode
+import org.treesitter.TSPoint
+import org.treesitter.TreeSitterJava
 
 /**
  * @author Enaium
  */
 class JavaDocumentCompletionService(project: Project, documentManager: DocumentManager) :
     AbstractDocumentCompletionService(project, documentManager) {
+
     override suspend fun completion(params: CompletionParams): List<CompletionItem> {
+        val document = documentManager.getDocument(params.textDocument.uri) as? JavaDocument ?: return emptyList()
+        val cursor = document.root.getNamedDescendantForPointRange(
+            TSPoint(params.position.line, params.position.character),
+            TSPoint(params.position.line, params.position.character)
+        )
+
+        val pkg = document.root.query(TreeSitterJava(), "(package_declaration (scoped_identifier) @name)")
+            .toMap()["name"]?.text(document.content)
+
+        val name = cursor?.findParent("interface_declaration")
+            ?.field("name")?.text(document.content) ?: return emptyList()
+        val qualifiedName = pkg?.let { "$it.$name" } ?: name
+
+        val annotation = cursor.findParent("annotation") ?: cursor.findParent("marker_annotation")
+        val annotationName = annotation?.field("name")?.text(document.content)?.substringAfterLast(".")
+
+        val methodName = cursor.findParent("method_declaration")?.field("name")?.text(document.content)
+
+        if (cursor.type != "string_literal") {
+            return emptyList()
+        }
+
+        context(document, qualifiedName) {
+            when (annotationName) {
+                OneToMany::class.simpleName, ManyToMany::class.simpleName, OneToOne::class.simpleName -> {
+                    return cursor.mappedBy(methodName ?: return emptyList())
+                }
+
+                IdView::class.simpleName -> {
+                    return cursor.idView(methodName ?: return emptyList())
+                }
+
+                OrderedProp::class.simpleName -> {
+                    return cursor.orderedProp(methodName ?: return emptyList())
+                }
+
+                Formula::class.simpleName -> {
+                    return cursor.formula(methodName ?: return emptyList())
+                }
+            }
+        }
         return emptyList()
+    }
+
+    context(document: JavaDocument, qualifiedName: String)
+    fun TSNode.mappedBy(propertyName: String): List<CompletionItem> {
+        val result = mutableListOf<CompletionItem>()
+        if (this.parent()?.type == "element_value_pair") {
+            if (this.parent()?.field("key")?.text(document.content) != "mappedBy") {
+                return result
+            }
+        }
+        project.dto.ofType(qualifiedName)?.properties[propertyName]?.targetType?.properties?.keys?.forEach {
+            result.add(CompletionItem(it).apply {
+                kind = CompletionItemKind.Method
+            })
+        }
+        return result
+    }
+
+    context(document: JavaDocument, qualifiedName: String)
+    fun TSNode.idView(propertyName: String): List<CompletionItem> {
+        val result = mutableListOf<CompletionItem>()
+        if (this.parent()?.type == "element_value_pair") {
+            if (this.parent()?.field("key")?.text(document.content) != "value") {
+                return result
+            }
+        }
+        project.dto.ofType(qualifiedName)?.properties?.keys?.filter { it != propertyName }?.forEach {
+            result.add(CompletionItem(it).apply {
+                kind = CompletionItemKind.Method
+            })
+        }
+        return result
+    }
+
+    context(document: JavaDocument, qualifiedName: String)
+    fun TSNode.orderedProp(propertyName: String): List<CompletionItem> {
+        val result = mutableListOf<CompletionItem>()
+        if (this.parent()?.type == "element_value_pair") {
+            if (this.parent()?.field("key")?.text(document.content) != "value") {
+                return result
+            }
+        }
+        project.dto.ofType(qualifiedName)?.properties[propertyName]?.targetType?.properties?.keys?.forEach {
+            result.add(CompletionItem(it).apply {
+                kind = CompletionItemKind.Method
+            })
+        }
+        return result
+    }
+
+    context(document: JavaDocument, qualifiedName: String)
+    fun TSNode.formula(propertyName: String): List<CompletionItem> {
+        val result = mutableListOf<CompletionItem>()
+
+        val pair = findParent("element_value_pair")
+        if (pair?.field("key")?.text(document.content) != "dependencies") {
+            return result
+        }
+
+        val text = namedChild(0)?.text(document.content)
+            ?: text(document.content)?.trim('"')
+            ?: return result
+
+        val trace = text.split(".")
+
+        if (trace.size == 1) {
+            project.dto.ofType(qualifiedName)?.properties?.keys?.filter { it != propertyName }?.forEach {
+                result.add(CompletionItem(it).apply {
+                    kind = CompletionItemKind.Method
+                })
+            }
+        } else {
+            var lastImmutableType: ImmutableType? = null
+            trace.forEachIndexed { index, propName ->
+                if (index != trace.size - 1) {
+                    lastImmutableType = project.dto.ofType(qualifiedName)?.properties[propName]?.targetType
+                }
+            }
+            lastImmutableType?.properties?.keys?.filter { it != propertyName }?.forEach {
+                result.add(CompletionItem(it).apply {
+                    kind = CompletionItemKind.Method
+                })
+            }
+        }
+        return result
     }
 }

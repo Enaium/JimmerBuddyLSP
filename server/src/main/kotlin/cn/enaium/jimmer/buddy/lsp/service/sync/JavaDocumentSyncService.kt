@@ -42,6 +42,7 @@ class JavaDocumentSyncService(project: Project, documentManager: DocumentManager
         path.extension != "java" && return
         val parser = TSParser()
         val language = TreeSitterJava()
+        parser.setLanguage(language)
         val parse = parser.parseString(null, content)
         documentManager.openOrUpdateDocument(uri, JavaDocument(content, parse.rootNode))
         when (type) {

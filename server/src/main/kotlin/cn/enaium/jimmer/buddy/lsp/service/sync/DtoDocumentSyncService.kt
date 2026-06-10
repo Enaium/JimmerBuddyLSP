@@ -19,11 +19,15 @@ package cn.enaium.jimmer.buddy.lsp.service.sync
 import cn.enaium.jimmer.buddy.codegen.gen.AptGen
 import cn.enaium.jimmer.buddy.codegen.gen.KspGen
 import cn.enaium.jimmer.buddy.codegen.utility.toDtoFile
-import cn.enaium.jimmer.buddy.dto.lang.*
+import cn.enaium.jimmer.buddy.dto.lang.DocumentDtoCompiler
+import cn.enaium.jimmer.buddy.dto.lang.DtoLexer
+import cn.enaium.jimmer.buddy.dto.lang.DtoParser
+import cn.enaium.jimmer.buddy.dto.lang.ImmutableType
 import cn.enaium.jimmer.buddy.lsp.client
 import cn.enaium.jimmer.buddy.lsp.document.DocumentManager
 import cn.enaium.jimmer.buddy.lsp.document.DtoDocument
 import cn.enaium.jimmer.buddy.lsp.exception.DiagnosticException
+import cn.enaium.jimmer.buddy.lsp.utility.dto
 import cn.enaium.jimmer.buddy.lsp.utility.findProjectDir
 import cn.enaium.jimmer.buddy.project.structure.Project
 import org.antlr.v4.runtime.*
@@ -41,7 +45,6 @@ import kotlin.io.path.*
  */
 class DtoDocumentSyncService(project: Project, documentManager: DocumentManager) :
     AbstractDocumentSyncService(project, documentManager) {
-    private val context = Context(project)
     override suspend fun validate(
         content: String,
         uri: String,
@@ -83,7 +86,7 @@ class DtoDocumentSyncService(project: Project, documentManager: DocumentManager)
                 DocumentDtoCompiler(findProjectDir(path, project.environment.directories)?.let { path.toDtoFile(it) }
                     ?: throw DiagnosticException("Could not find project directory"))
             documentDtoCompiler.compile(
-                context.ofType(documentDtoCompiler.sourceTypeName)?.also {
+                project.dto.ofType(documentDtoCompiler.sourceTypeName)?.also {
                     immutableType = it
                 }
                     ?: throw DiagnosticException("No immutable type '${documentDtoCompiler.sourceTypeName}' found. Please use the export statement.")
@@ -165,7 +168,7 @@ class DtoDocumentSyncService(project: Project, documentManager: DocumentManager)
         when (type) {
             Type.OPEN, Type.CHANGE, Type.SAVE -> {
                 documentManager.openOrUpdateDocument(
-                    uri, DtoDocument(content, context, immutableType, token, cst)
+                    uri, DtoDocument(content, immutableType, token, cst)
                 )
             }
 

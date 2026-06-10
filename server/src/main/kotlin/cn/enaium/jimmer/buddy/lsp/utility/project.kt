@@ -16,21 +16,15 @@
 
 package cn.enaium.jimmer.buddy.lsp.utility
 
-import org.babyfish.jimmer.sql.ManyToMany
-import org.babyfish.jimmer.sql.ManyToOne
-import org.babyfish.jimmer.sql.OneToMany
-import org.babyfish.jimmer.sql.OneToOne
-import java.net.URI
+import cn.enaium.jimmer.buddy.dto.lang.Context
+import cn.enaium.jimmer.buddy.project.structure.Project
 
 /**
  * @author Enaium
  */
-fun URI.copy(scheme: String): URI {
-    return URI.create("$scheme${this.toString().substring(this.scheme.length)}")
-}
+private var context: Context? = null
 
-
-val toManyAnnotations = listOfNotNull(OneToMany::class.qualifiedName, ManyToMany::class.qualifiedName)
-val toOneAnnotations = listOfNotNull(OneToOne::class.qualifiedName, ManyToOne::class.qualifiedName)
-
-val mappedByAnnotations = toManyAnnotations + listOfNotNull(OneToOne::class.qualifiedName)
+val Project.dto
+    get() = context ?: Context { this.environment.getIndex() }.also {
+        context = it
+    }

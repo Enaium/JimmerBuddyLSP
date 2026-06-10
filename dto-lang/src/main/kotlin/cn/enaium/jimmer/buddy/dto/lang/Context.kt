@@ -16,17 +16,17 @@
 
 package cn.enaium.jimmer.buddy.dto.lang
 
+import cn.enaium.jimmer.buddy.lang.parser.index.ClassIndex
 import cn.enaium.jimmer.buddy.lang.parser.node.BaseClassNode
-import cn.enaium.jimmer.buddy.project.structure.Project
 
 /**
  * @author Enaium
  */
-class Context(val project: Project) {
+class Context(val classIndex: () -> ClassIndex) {
     private val sourceCache = mutableMapOf<String, BaseClassNode>()
 
     fun ofSource(qualifiedName: String): BaseClassNode? {
-        return sourceCache[qualifiedName] ?: project.environment.findClass(qualifiedName)?.also {
+        return sourceCache[qualifiedName] ?: classIndex().findClass(qualifiedName)?.also {
             sourceCache[qualifiedName] = it
         }
     }
@@ -34,7 +34,7 @@ class Context(val project: Project) {
     private val typeCache = mutableMapOf<String, ImmutableType>()
 
     fun ofType(qualifiedName: String): ImmutableType? {
-        return typeCache[qualifiedName] ?: project.environment.findClass(qualifiedName)?.let {
+        return typeCache[qualifiedName] ?: classIndex().findClass(qualifiedName)?.let {
             ImmutableType(this, it).also {
                 typeCache[qualifiedName] = it
             }

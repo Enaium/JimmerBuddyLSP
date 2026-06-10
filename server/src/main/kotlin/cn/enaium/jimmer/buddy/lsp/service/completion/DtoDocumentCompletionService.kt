@@ -25,6 +25,7 @@ import cn.enaium.jimmer.buddy.lang.parser.entity.type.ClassType
 import cn.enaium.jimmer.buddy.lang.parser.utility.findParent
 import cn.enaium.jimmer.buddy.lsp.document.DocumentManager
 import cn.enaium.jimmer.buddy.lsp.document.DtoDocument
+import cn.enaium.jimmer.buddy.lsp.utility.dto
 import cn.enaium.jimmer.buddy.project.structure.Project
 import org.eclipse.lsp4j.*
 
@@ -166,7 +167,7 @@ class DtoDocumentCompletionService(project: Project, documentManager: DocumentMa
             findCursor.findPropTrace()
         ).mapNotNull { memberNode ->
             val prop =
-                project.environment.findClass(memberNode.className)?.let { document.context.ofType(it.qualifiedName) }
+                project.environment.findClass(memberNode.className)?.let { project.dto.ofType(it.qualifiedName) }
                     ?.properties?.values
                     ?.find { it.name == memberNode.name } ?: return@mapNotNull null
             CompletionItem(memberNode.name).apply {

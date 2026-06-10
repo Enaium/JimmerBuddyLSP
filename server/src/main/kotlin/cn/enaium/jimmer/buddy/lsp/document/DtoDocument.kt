@@ -26,7 +26,6 @@ import org.antlr.v4.runtime.CommonTokenStream
  */
 class DtoDocument(
     content: String,
-    val context: Context,
     val type: ImmutableType?,
     val token: CommonTokenStream,
     val cst: DtoParser.DtoContext

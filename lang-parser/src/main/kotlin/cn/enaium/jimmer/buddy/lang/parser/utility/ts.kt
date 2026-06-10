@@ -61,6 +61,22 @@ fun TSNode.prevNamedSibling(): TSNode? {
     return this.prevNamedSibling?.takeIf { !it.isNull }
 }
 
+fun TSNode.child(index: Int): TSNode? {
+    return try {
+        this.getChild(index)?.takeIf { !it.isNull }
+    } catch (_: Throwable) {
+        null
+    }
+}
+
+fun TSNode.namedChild(index: Int): TSNode? {
+    return try {
+        this.getNamedChild(index)?.takeIf { !it.isNull }
+    } catch (_: Throwable) {
+        null
+    }
+}
+
 fun TSNode.findParent(type: String): TSNode? {
     if (this.type == type) {
         return this

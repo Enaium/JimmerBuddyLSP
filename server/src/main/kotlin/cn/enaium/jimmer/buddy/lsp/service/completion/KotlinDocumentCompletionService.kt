@@ -16,16 +16,14 @@
 
 package cn.enaium.jimmer.buddy.lsp.service.completion
 
-import cn.enaium.jimmer.buddy.dto.lang.Context
 import cn.enaium.jimmer.buddy.dto.lang.ImmutableType
-import cn.enaium.jimmer.buddy.lang.parser.node.BaseClassNode
-import cn.enaium.jimmer.buddy.lang.parser.utility.findParent
-import cn.enaium.jimmer.buddy.lang.parser.utility.prevNamedSibling
-import cn.enaium.jimmer.buddy.lang.parser.utility.query
-import cn.enaium.jimmer.buddy.lang.parser.utility.text
+import cn.enaium.jimmer.buddy.lang.parser.utility.*
 import cn.enaium.jimmer.buddy.lsp.document.DocumentManager
 import cn.enaium.jimmer.buddy.lsp.document.KotlinDocument
+import cn.enaium.jimmer.buddy.lsp.utility.dto
 import cn.enaium.jimmer.buddy.project.structure.Project
+import org.babyfish.jimmer.Formula
+import org.babyfish.jimmer.sql.*
 import org.eclipse.lsp4j.CompletionItem
 import org.eclipse.lsp4j.CompletionParams
 import org.treesitter.TSNode
@@ -37,8 +35,6 @@ import org.treesitter.TreeSitterKotlin
  */
 class KotlinDocumentCompletionService(project: Project, documentManager: DocumentManager) :
     AbstractDocumentCompletionService(project, documentManager) {
-
-    private val context = Context(project)
 
     override suspend fun completion(params: CompletionParams): List<CompletionItem> {
         val document = documentManager.getDocument(params.textDocument.uri) as? KotlinDocument ?: return emptyList()
@@ -52,34 +48,113 @@ class KotlinDocumentCompletionService(project: Project, documentManager: Documen
         val name = cursor?.findParent("class_declaration")
             ?.query(TreeSitterKotlin(), "(class_declaration (type_identifier) @name)")
             ?.toMap()["name"]?.text(document.content) ?: return emptyList()
-        val baseClass = project.environment.getIndex().findClass(pkg?.let { "$it.$name" } ?: name) ?: return emptyList()
-        context(document, baseClass) {
-            if (cursor.parent?.type == "value_argument") {
-                cursor.prevNamedSibling()?.takeIf { it.type == "simple_identifier" }?.also { identifier ->
-                    val argName = identifier.text(document.content)
-                    when (argName) {
-                        "mappedBy" -> return cursor.mappedBy()
-                    }
+        val qualifiedName = pkg?.let { "$it.$name" } ?: name
+        val annotation = cursor.findParent("annotation")
+        val annotationName = annotation?.let {
+            cursor.findParent("call_expression")
+                ?.namedChild(0)?.text(document.content)
+                ?: it.query(TreeSitterKotlin(), "(annotation (constructor_invocation (user_type) @name))")
+                    .toMap()["name"]?.text(document.content)?.substringAfterLast(".")
+        }
+
+        val propertyName = cursor.findParent("property_declaration")?.let { property ->
+            property.query(
+                TreeSitterKotlin(),
+                "(property_declaration (variable_declaration (simple_identifier) @name))"
+            ).toMap()["name"]?.text(document.content)
+        }
+
+        if (cursor.type != "string_literal") {
+            return emptyList()
+        }
+
+        context(document, qualifiedName) {
+            when (annotationName) {
+                OneToMany::class.simpleName, ManyToMany::class.simpleName, OneToOne::class.simpleName -> {
+                    return cursor.mappedBy(propertyName ?: return emptyList())
+                }
+
+                IdView::class.simpleName -> {
+                    return cursor.idView(propertyName ?: return emptyList())
+                }
+
+                OrderedProp::class.simpleName -> {
+                    return cursor.orderedProp(propertyName ?: return emptyList())
+                }
+
+                Formula::class.simpleName -> {
+                    return cursor.formula(propertyName ?: return emptyList())
                 }
             }
         }
         return emptyList()
     }
 
-    context(document: KotlinDocument, baseClass: BaseClassNode)
-    fun TSNode.mappedBy(): List<CompletionItem> {
+    context(document: KotlinDocument, qualifiedName: String)
+    fun TSNode.mappedBy(propertyName: String): List<CompletionItem> {
         val result = mutableListOf<CompletionItem>()
-        this.findParent("property_declaration")?.also { property ->
-            property.query(
-                TreeSitterKotlin(),
-                "(property_declaration (variable_declaration (simple_identifier) @name))"
-            ).toMap()["name"]?.text(document.content)?.also { name ->
-                ImmutableType(
-                    context,
-                    baseClass
-                ).declaredProperties[name]?.targetType?.properties?.keys?.forEach {
+        if (this.parent()?.type == "value_argument") {
+            if (this.prevNamedSibling()?.text(document.content) != "mappedBy") {
+                return result
+            }
+        }
+        project.dto.ofType(qualifiedName)?.properties[propertyName]?.targetType?.properties?.keys?.forEach {
+            result.add(CompletionItem(it))
+        }
+        return result
+    }
+
+    context(document: KotlinDocument, qualifiedName: String)
+    fun TSNode.idView(propertyName: String): List<CompletionItem> {
+        val result = mutableListOf<CompletionItem>()
+        if (this.parent()?.type == "value_argument") {
+            if (this.prevNamedSibling().let { it == null || it.text(document.content) == "value" }) {
+                project.dto.ofType(qualifiedName)?.properties?.keys?.filter { it != propertyName }?.forEach {
                     result.add(CompletionItem(it))
                 }
+            }
+        }
+        return result
+    }
+
+    context(document: KotlinDocument, qualifiedName: String)
+    fun TSNode.orderedProp(propertyName: String): List<CompletionItem> {
+        val result = mutableListOf<CompletionItem>()
+        if (this.parent()?.parent()?.type == "value_argument") {
+            if (this.parent()?.prevNamedSibling().let { it == null || it.text(document.content) == "value" }) {
+                project.dto.ofType(qualifiedName)?.properties[propertyName]?.targetType?.properties?.keys?.forEach {
+                    result.add(CompletionItem(it))
+                }
+            }
+        }
+        return result
+    }
+
+    context(document: KotlinDocument, qualifiedName: String)
+    fun TSNode.formula(propertyName: String): List<CompletionItem> {
+        val result = mutableListOf<CompletionItem>()
+        if (this.parent()?.type == "value_argument") {
+            if (this.parent()?.prevNamedSibling()?.text(document.content) != "dependencies") {
+                return result
+            }
+        }
+
+        val text = this.namedChild(0)?.text(document.content) ?: return result
+        val trace = text.split(".")
+
+        if (trace.size == 1) {
+            project.dto.ofType(qualifiedName)?.properties?.keys?.filter { it != propertyName }?.forEach {
+                result.add(CompletionItem(it))
+            }
+        } else {
+            var lastImmutableType: ImmutableType? = null
+            trace.forEachIndexed { index, propName ->
+                if (index != trace.size - 1) {
+                    lastImmutableType = project.dto.ofType(qualifiedName)?.properties[propName]?.targetType
+                }
+            }
+            lastImmutableType?.properties?.keys?.filter { it != propertyName }?.forEach {
+                result.add(CompletionItem(it))
             }
         }
         return result

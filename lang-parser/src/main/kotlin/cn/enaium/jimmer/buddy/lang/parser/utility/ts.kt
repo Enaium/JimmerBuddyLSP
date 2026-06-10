@@ -24,15 +24,12 @@ import org.treesitter.*
 fun TSNode.text(content: String): String? {
     val start = this.startByte
     val end = this.endByte
-    if (start > content.length || end > content.length) {
-        return null
-    }
-    return content.substring(start, end)
+    return String(content.toByteArray(), start, (end - start), Charsets.UTF_8)
 }
 
 fun TSNode.field(name: String): TSNode? {
     return try {
-        this.getChildByFieldName(name)
+        this.getChildByFieldName(name)?.takeIf { !it.isNull }
     } catch (e: Exception) {
         return null
     }

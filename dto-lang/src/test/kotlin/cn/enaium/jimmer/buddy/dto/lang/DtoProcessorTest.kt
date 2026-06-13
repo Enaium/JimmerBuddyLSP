@@ -16,6 +16,8 @@
 
 package cn.enaium.jimmer.buddy.dto.lang
 
+import cn.enaium.jimmer.buddy.lang.parser.index.InMemoryClassIndex
+import cn.enaium.jimmer.buddy.lang.parser.node.BaseClassNode
 import cn.enaium.jimmer.buddy.lang.parser.node.ClassTypeNode
 import cn.enaium.jimmer.buddy.lang.parser.node.InterfaceNode
 import cn.enaium.jimmer.buddy.lang.parser.node.MethodNode
@@ -41,7 +43,7 @@ class DtoProcessorTest {
     @Test
     fun findTrace() {
         val dtoProcessor = DtoProcessor(Path("build/resources/test/Simple.dto").readText())
-        assertEquals("object1.object2", dtoProcessor.findTrace(13, 0).joinToString("."))
+        assertEquals("object1.object2.object3", dtoProcessor.findTrace(13, 0)?.joinToString("."))
     }
 
     @Test
@@ -51,18 +53,20 @@ class DtoProcessorTest {
         assertIterableEquals(
             listOf("prop1", "prop2", "prop3"),
             dtoProcessor.findProps(
-                mapOf(
-                    "cn.enaium.model.Simple" to InterfaceNode(
-                        "cn.enaium.model.Simple",
-                        Path(""),
-                        members = setOf(
-                            MethodNode("cn.enaium.model.Simple", "prop1", type = PrimitiveTypeNode("int")),
-                            MethodNode("cn.enaium.model.Simple", "prop2", type = PrimitiveTypeNode("int")),
-                            MethodNode("cn.enaium.model.Simple", "prop3", type = PrimitiveTypeNode("int")),
+                InMemoryClassIndex(
+                    mapOf(
+                        "cn.enaium.model.Simple" to InterfaceNode(
+                            "cn.enaium.model.Simple",
+                            Path(""),
+                            members = setOf(
+                                MethodNode("cn.enaium.model.Simple", "prop1", type = PrimitiveTypeNode("int")),
+                                MethodNode("cn.enaium.model.Simple", "prop2", type = PrimitiveTypeNode("int")),
+                                MethodNode("cn.enaium.model.Simple", "prop3", type = PrimitiveTypeNode("int")),
+                            )
                         )
                     )
-                ), emptyList()
-            )
+                ), "cn.enaium.model.Simple", emptyList()
+            ).map { it.name }
         )
 
         // Have super types
@@ -72,80 +76,84 @@ class DtoProcessorTest {
                 "prop1", "prop2", "prop3"
             ),
             dtoProcessor.findProps(
-                mapOf(
-                    "cn.enaium.model.BaseEntity" to InterfaceNode(
-                        "cn.enaium.model.BaseEntity",
-                        Path(""),
-                        members = setOf(
-                            MethodNode("cn.enaium.model.BaseEntity", "baseProp1", type = PrimitiveTypeNode("int")),
-                            MethodNode("cn.enaium.model.BaseEntity", "baseProp2", type = PrimitiveTypeNode("int")),
-                            MethodNode("cn.enaium.model.BaseEntity", "baseProp3", type = PrimitiveTypeNode("int")),
-                        )
-                    ),
-                    "cn.enaium.model.Simple" to InterfaceNode(
-                        "cn.enaium.model.Simple",
-                        Path(""),
-                        supers = setOf(
-                            ClassTypeNode("BaseEntity", "cn.enaium.model.BaseEntity"),
+                InMemoryClassIndex(
+                    mapOf(
+                        "cn.enaium.model.BaseEntity" to InterfaceNode(
+                            "cn.enaium.model.BaseEntity",
+                            Path(""),
+                            members = setOf(
+                                MethodNode("cn.enaium.model.BaseEntity", "baseProp1", type = PrimitiveTypeNode("int")),
+                                MethodNode("cn.enaium.model.BaseEntity", "baseProp2", type = PrimitiveTypeNode("int")),
+                                MethodNode("cn.enaium.model.BaseEntity", "baseProp3", type = PrimitiveTypeNode("int")),
+                            )
                         ),
-                        members = setOf(
-                            MethodNode("cn.enaium.model.Simple", "prop1", type = PrimitiveTypeNode("int")),
-                            MethodNode("cn.enaium.model.Simple", "prop2", type = PrimitiveTypeNode("int")),
-                            MethodNode("cn.enaium.model.Simple", "prop3", type = PrimitiveTypeNode("int")),
+                        "cn.enaium.model.Simple" to InterfaceNode(
+                            "cn.enaium.model.Simple",
+                            Path(""),
+                            supers = setOf(
+                                ClassTypeNode("BaseEntity", "cn.enaium.model.BaseEntity"),
+                            ),
+                            members = setOf(
+                                MethodNode("cn.enaium.model.Simple", "prop1", type = PrimitiveTypeNode("int")),
+                                MethodNode("cn.enaium.model.Simple", "prop2", type = PrimitiveTypeNode("int")),
+                                MethodNode("cn.enaium.model.Simple", "prop3", type = PrimitiveTypeNode("int")),
+                            )
                         )
                     )
-                ), emptyList()
+                ), "cn.enaium.model.Simple", emptyList()
             ).map { it.name }
         )
 
         // Use trace
-        val threeLayerNesting = mapOf(
-            "cn.enaium.model.Object3" to InterfaceNode(
-                "cn.enaium.model.Object3", Path(""), members = setOf(
-                    MethodNode("cn.enaium.model.Object3", "prop1", type = PrimitiveTypeNode("int")),
-                    MethodNode("cn.enaium.model.Object3", "prop2", type = PrimitiveTypeNode("int")),
-                    MethodNode("cn.enaium.model.Object3", "prop3", type = PrimitiveTypeNode("int")),
-                )
-            ),
-            "cn.enaium.model.Object2" to InterfaceNode(
-                "cn.enaium.model.Object2", Path(""), members = setOf(
-                    MethodNode(
-                        "cn.enaium.model.Object2",
-                        "object3",
-                        type = ClassTypeNode("Object3", "cn.enaium.model.Object3")
-                    ),
-                )
-            ),
-            "cn.enaium.model.Object1" to InterfaceNode(
-                "cn.enaium.model.Object1", Path(""), members = setOf(
-                    MethodNode(
-                        "cn.enaium.model.Object1",
-                        "object2",
-                        type = ClassTypeNode("Object2", "cn.enaium.model.Object2")
-                    ),
-                )
-            ),
-            "cn.enaium.model.Simple" to InterfaceNode(
-                "cn.enaium.model.Simple", Path(""), members = setOf(
-                    MethodNode(
-                        "cn.enaium.model.Simple",
-                        "object1",
-                        type = ClassTypeNode("Object1", "cn.enaium.model.Object1")
-                    ),
+        val threeLayerNesting = InMemoryClassIndex(
+            mapOf(
+                "cn.enaium.model.Object3" to InterfaceNode(
+                    "cn.enaium.model.Object3", Path(""), members = setOf(
+                        MethodNode("cn.enaium.model.Object3", "prop1", type = PrimitiveTypeNode("int")),
+                        MethodNode("cn.enaium.model.Object3", "prop2", type = PrimitiveTypeNode("int")),
+                        MethodNode("cn.enaium.model.Object3", "prop3", type = PrimitiveTypeNode("int")),
+                    )
+                ),
+                "cn.enaium.model.Object2" to InterfaceNode(
+                    "cn.enaium.model.Object2", Path(""), members = setOf(
+                        MethodNode(
+                            "cn.enaium.model.Object2",
+                            "object3",
+                            type = ClassTypeNode("Object3", "cn.enaium.model.Object3")
+                        ),
+                    )
+                ),
+                "cn.enaium.model.Object1" to InterfaceNode(
+                    "cn.enaium.model.Object1", Path(""), members = setOf(
+                        MethodNode(
+                            "cn.enaium.model.Object1",
+                            "object2",
+                            type = ClassTypeNode("Object2", "cn.enaium.model.Object2")
+                        ),
+                    )
+                ),
+                "cn.enaium.model.Simple" to InterfaceNode(
+                    "cn.enaium.model.Simple", Path(""), members = setOf(
+                        MethodNode(
+                            "cn.enaium.model.Simple",
+                            "object1",
+                            type = ClassTypeNode("Object1", "cn.enaium.model.Object1")
+                        ),
+                    )
                 )
             )
         )
         assertIterableEquals(
             listOf("prop1", "prop2", "prop3"),
             dtoProcessor.findProps(
-                threeLayerNesting, listOf("object1", "object2", "object3")
+                threeLayerNesting, "cn.enaium.model.Simple", listOf("object1", "object2", "object3")
             ).map { it.name }
         )
 
         assertIterableEquals(
             listOf("prop1", "prop2", "prop3"),
             dtoProcessor.findProps(
-                threeLayerNesting, dtoProcessor.findTrace(14, 0)
+                threeLayerNesting, "cn.enaium.model.Simple", dtoProcessor.findTrace(14, 0)
             ).map { it.name }
         )
     }

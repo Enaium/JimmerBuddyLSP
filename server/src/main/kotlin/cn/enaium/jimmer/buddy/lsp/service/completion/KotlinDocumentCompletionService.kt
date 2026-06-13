@@ -125,7 +125,7 @@ class KotlinDocumentCompletionService(project: Project, documentManager: Documen
     context(document: KotlinDocument, qualifiedName: String)
     fun TSNode.orderedProp(propertyName: String): List<CompletionItem> {
         val result = mutableListOf<CompletionItem>()
-        if (this.parent()?.parent()?.type == "value_argument") {
+        if (this.parent()?.type == "value_argument") {
             if (this.parent()?.prevNamedSibling().let { it == null || it.text(document.content) == "value" }) {
                 project.dto.ofType(qualifiedName)?.properties[propertyName]?.targetType?.properties?.keys?.forEach {
                     result.add(CompletionItem(it).apply {

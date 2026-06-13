@@ -162,12 +162,12 @@ class DtoDocumentCompletionService(project: Project, documentManager: DocumentMa
         }
 
         return dtoProcessor.findProps(
-            project.environment,
-            document.type ?: return emptyList(),
+            project.environment.getIndex(),
+            document.type?.qualifiedName ?: return emptyList(),
             findCursor.findPropTrace()
         ).mapNotNull { memberNode ->
             val prop =
-                project.environment.findClass(memberNode.className)?.let { project.dto.ofType(it.qualifiedName) }
+                project.environment.getIndex().findClass(memberNode.className)?.let { project.dto.ofType(it.qualifiedName) }
                     ?.properties?.values
                     ?.find { it.name == memberNode.name } ?: return@mapNotNull null
             CompletionItem(memberNode.name).apply {

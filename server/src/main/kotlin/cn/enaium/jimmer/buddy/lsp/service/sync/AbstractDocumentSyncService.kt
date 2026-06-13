@@ -34,7 +34,7 @@ abstract class AbstractDocumentSyncService(
 
     val deq = DelayedExecutionQueue()
 
-    abstract suspend fun validate(content: String, uri: String, type: Type)
+    abstract fun validate(content: String, uri: String, type: Type)
 
     enum class Type {
         OPEN, CHANGE, CLOSE, SAVE

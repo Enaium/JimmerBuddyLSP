@@ -19,8 +19,8 @@ package cn.enaium.jimmer.buddy.codegen.gen
 import cn.enaium.jimmer.buddy.codegen.symbol.AptProcessor
 import cn.enaium.jimmer.buddy.codegen.utility.createRoundEnvironment
 import cn.enaium.jimmer.buddy.codegen.utility.toDtoFile
+import cn.enaium.jimmer.buddy.lang.parser.index.ClassIndex
 import cn.enaium.jimmer.buddy.lang.parser.node.BaseClassNode
-import cn.enaium.jimmer.buddy.project.structure.Environment
 import org.babyfish.jimmer.apt.client.DocMetadata
 import org.babyfish.jimmer.apt.createAptOption
 import org.babyfish.jimmer.apt.dto.AptDtoCompiler
@@ -40,16 +40,16 @@ import javax.lang.model.element.TypeElement
  */
 class AptGen(
     projectDir: Path,
-    environment: Environment,
+    classIndex: ClassIndex,
     genDir: Path,
     options: Map<String, String>
-) : Gen(projectDir, environment, genDir, options) {
+) : Gen(projectDir, classIndex, genDir, options) {
 
     private val logger = LoggerFactory.getLogger(AptGen::class.java)
 
     fun sourceProcess(genClasses: Set<BaseClassNode>) {
         try {
-            val (pe, rootElements, sources) = AptProcessor(environment).process(genClasses)
+            val (pe, rootElements, sources) = AptProcessor(classIndex).process(genClasses)
             val option = createAptOption(emptyMap(), pe.elementUtils, pe.typeUtils, pe.filer)
             val roundEnv = createRoundEnvironment(rootElements)
 
@@ -89,7 +89,7 @@ class AptGen(
     }
 
     fun dtoFileProcess(files: Set<DtoFile>, name: String? = null) {
-        val (pe, rootElements, sources) = AptProcessor(environment).process(emptySet())
+        val (pe, rootElements, sources) = AptProcessor(classIndex).process(emptySet())
         val option = createAptOption(
             options,
             pe.elementUtils,

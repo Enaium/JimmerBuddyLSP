@@ -32,7 +32,7 @@ import kotlin.io.path.toPath
  */
 class KotlinDocumentSyncService(project: Project, documentManager: DocumentManager) :
     AbstractDocumentSyncService(project, documentManager) {
-    override suspend fun validate(
+    override fun validate(
         content: String,
         uri: String,
         type: Type
@@ -61,7 +61,7 @@ class KotlinDocumentSyncService(project: Project, documentManager: DocumentManag
                     val genClasses = index.findClasses(path.parent).filter { it.path == path }.toSet()
                     KspGen(
                         module.directory,
-                        project.environment,
+                        project.environment.getIndex(),
                         genDir,
                         emptyMap()
                     ).sourceProcess(genClasses)

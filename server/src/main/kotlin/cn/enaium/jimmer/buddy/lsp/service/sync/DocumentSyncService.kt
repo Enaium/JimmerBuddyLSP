@@ -47,9 +47,7 @@ class DocumentSyncService(val project: Project, val documentManager: DocumentMan
         }
         val content = params.textDocument.text
         content.isBlank() && return
-        CoroutineScope(Dispatchers.Default).launch {
-            validate(content, params.textDocument.uri, Type.OPEN)
-        }
+        validate(content, params.textDocument.uri, Type.OPEN)
     }
 
     override fun didChange(params: DidChangeTextDocumentParams) {
@@ -60,9 +58,7 @@ class DocumentSyncService(val project: Project, val documentManager: DocumentMan
         }
         val content = params.contentChanges[0].text
         content.isBlank() && return
-        CoroutineScope(Dispatchers.Default).launch {
-            validate(content, params.textDocument.uri, Type.CHANGE)
-        }
+        validate(content, params.textDocument.uri, Type.CHANGE)
     }
 
     override fun didClose(params: DidCloseTextDocumentParams) {
@@ -77,12 +73,10 @@ class DocumentSyncService(val project: Project, val documentManager: DocumentMan
         }
         val content = params.text
         content.isBlank() && return
-        CoroutineScope(Dispatchers.Default).launch {
-            validate(content, params.textDocument.uri, Type.SAVE)
-        }
+        validate(content, params.textDocument.uri, Type.SAVE)
     }
 
-    suspend fun validate(content: String, uri: String, type: Type) {
+    fun validate(content: String, uri: String, type: Type) {
         services.forEach { it.validate(content, uri, type) }
     }
 }

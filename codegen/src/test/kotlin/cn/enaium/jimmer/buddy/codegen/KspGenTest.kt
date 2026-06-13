@@ -17,6 +17,7 @@
 package cn.enaium.jimmer.buddy.codegen
 
 import cn.enaium.jimmer.buddy.codegen.gen.KspGen
+import cn.enaium.jimmer.buddy.lang.parser.index.InMemoryClassIndex
 import cn.enaium.jimmer.buddy.lang.parser.processor.KotlinSourceProcessor
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -34,22 +35,24 @@ class KspGenTest {
             val projectDir = Path(System.getProperty("user.dir")) / "build/resources/test/projects/simple-jimmer-model"
             val process =
                 KotlinSourceProcessor(
-                    listOf(
+                    setOf(
                         Path(System.getProperty("java.home")) / "lib/src.zip",
                         Path(System.getProperty("user.home")) / ".gradle/caches/modules-2/files-2.1/org.babyfish.jimmer/jimmer-core/0.10.7/aaa9d8a74d4764e87f0e6b823ad593f014c8c914/jimmer-core-0.10.7-sources.jar",
                         projectDir / "src/main/kotlin"
-                    )
+                    ),
+                    InMemoryClassIndex()
                 ).process()
 
             val genDir = createTempDirectory("JimmerBuddyLSP-KspGenTest")
             val sourceDir = genDir / "source"
             val dtoDir = genDir / "dto"
+            val genClasses = process.findClasses(projectDir / "src/main/kotlin").filter { it.path.parent.isDirectory() }.toSet()
             KspGen(
                 projectDir,
                 process,
                 sourceDir,
                 emptyMap(),
-            ).sourceProcess(process.values.filter { it.path.parent.isDirectory() }.toSet())
+            ).sourceProcess(genClasses)
             assertEquals(23, sourceDir.walk().count())
             KspGen(
                 projectDir,

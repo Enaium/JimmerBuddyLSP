@@ -18,7 +18,7 @@ package cn.enaium.jimmer.buddy.codegen.symbol
 
 import cn.enaium.jimmer.buddy.codegen.utility.*
 import cn.enaium.jimmer.buddy.lang.parser.node.*
-import cn.enaium.jimmer.buddy.project.structure.Environment
+import cn.enaium.jimmer.buddy.lang.parser.index.ClassIndex
 import net.bytebuddy.ByteBuddy
 import net.bytebuddy.description.modifier.Visibility
 import net.bytebuddy.implementation.FixedValue
@@ -52,7 +52,7 @@ import kotlin.io.path.div
  * @author Enaium
  */
 class AptProcessor(
-    val environment: Environment
+    val classIndex: ClassIndex
 ) {
     val caches = mutableMapOf<String, TypeElement>()
     private val classCache = mutableMapOf<String, BaseClassNode?>()
@@ -60,7 +60,7 @@ class AptProcessor(
     private fun findClass(qualifiedName: String?): BaseClassNode? {
         if (qualifiedName == null) return null
         return classCache.getOrPut(qualifiedName) {
-            environment.findClass(qualifiedName)
+            classIndex.findClass(qualifiedName)
         }
     }
 
@@ -448,7 +448,7 @@ class AptProcessor(
     }
 
     fun toImmutable(classNode: BaseClassNode): ImmutableType {
-        val (pe, rootElements, sources) = AptProcessor(environment).process(emptySet())
+        val (pe, rootElements, sources) = AptProcessor(classIndex).process(emptySet())
         val context = createContext(pe.elementUtils, pe.typeUtils, pe.filer)
         return context.getImmutableType(pe.elementUtils.getTypeElement(classNode.qualifiedName))
     }

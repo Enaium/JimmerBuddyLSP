@@ -62,12 +62,6 @@ class Environment {
 
     fun getIndex(): ClassIndexImpl = classIndex ?: error("ClassIndex not initialized")
 
-    fun findClass(qualifiedName: String): BaseClassNode? = getIndex().findClass(qualifiedName)
-
-    fun findClasses(directory: Path): List<BaseClassNode> = getIndex().findClasses(directory)
-
-    fun upsertClass(qualifiedName: String, classNode: BaseClassNode) = getIndex().upsertClass(qualifiedName, classNode)
-
     private val onExits = mutableListOf<() -> Unit>()
 
     @OptIn(ExperimentalPathApi::class)

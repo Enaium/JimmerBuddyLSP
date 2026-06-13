@@ -19,7 +19,7 @@ package cn.enaium.jimmer.buddy.dto.lang
 import cn.enaium.jimmer.buddy.dto.lang.utility.findPropTrace
 import cn.enaium.jimmer.buddy.lang.parser.node.*
 import cn.enaium.jimmer.buddy.lang.parser.utility.overlaps
-import cn.enaium.jimmer.buddy.project.structure.Environment
+import cn.enaium.jimmer.buddy.lang.parser.index.ClassIndex
 import org.antlr.v4.runtime.CharStreams
 import org.antlr.v4.runtime.CommonTokenStream
 import org.antlr.v4.runtime.ParserRuleContext
@@ -65,27 +65,27 @@ class DtoProcessor(val source: String) {
     }
 
     fun findProps(
-        environment: Environment,
-        immutableType: ImmutableType, line: Int, column: Int
+        classIndex: ClassIndex,
+        qualifiedName: String, line: Int, column: Int
     ): List<MemberNode> {
-        return findProps(environment, immutableType, findTrace(line, column))
+        return findProps(classIndex, qualifiedName, findTrace(line, column))
     }
 
     fun findProps(
-        environment: Environment,
-        immutableType: ImmutableType,
+        classIndex: ClassIndex,
+        qualifiedName: String,
         trace: List<String>?
     ): List<MemberNode> {
         trace ?: return listOf()
         if (trace.isEmpty()) {
-            return environment.getMembers(immutableType.qualifiedName)
+            return classIndex.getMembers(qualifiedName)
         } else {
             val trace = ArrayDeque(trace)
-            var lastQualifiedName: String? = immutableType.qualifiedName
+            var lastQualifiedName: String? = qualifiedName
 
             while (trace.isNotEmpty() && lastQualifiedName != null) {
                 val propName = trace.poll()
-                environment.getMembers(lastQualifiedName).find { it.name == propName }?.also { memberNode ->
+                classIndex.getMembers(lastQualifiedName).find { it.name == propName }?.also { memberNode ->
                     when (memberNode) {
                         is MethodNode -> {
                             memberNode.type
@@ -109,13 +109,13 @@ class DtoProcessor(val source: String) {
             }
 
             lastQualifiedName?.also {
-                return environment.getMembers(lastQualifiedName)
+                return classIndex.getMembers(lastQualifiedName)
             }
         }
         return emptyList()
     }
 
-    fun Environment.getMembers(qualifiedName: String): List<MemberNode> {
+    fun ClassIndex.getMembers(qualifiedName: String): List<MemberNode> {
         val members = mutableListOf<MemberNode>()
         (findClass(qualifiedName) as? InterfaceNode)?.also { interfaceNode ->
             val supers = ArrayDeque<TypeNode>()
@@ -138,7 +138,7 @@ class DtoProcessor(val source: String) {
         return members
     }
 
-    fun findType(environment: Environment, trace: List<String>?, immutableType: ImmutableType): ImmutableType? {
+    fun findType(classIndex: ClassIndex, trace: List<String>?, immutableType: ImmutableType): ImmutableType? {
         trace ?: return null
         if (trace.isEmpty()) {
             return immutableType
@@ -148,7 +148,7 @@ class DtoProcessor(val source: String) {
 
             while (trace.isNotEmpty() && lastQualifiedName != null) {
                 val propName = trace.poll()
-                environment.getMembers(lastQualifiedName).find { it.name == propName }?.also { memberNode ->
+                classIndex.getMembers(lastQualifiedName).find { it.name == propName }?.also { memberNode ->
                     when (memberNode) {
                         is MethodNode -> {
                             memberNode.type

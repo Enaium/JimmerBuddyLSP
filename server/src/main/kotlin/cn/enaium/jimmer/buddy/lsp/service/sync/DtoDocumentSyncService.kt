@@ -45,7 +45,7 @@ import kotlin.io.path.*
  */
 class DtoDocumentSyncService(project: Project, documentManager: DocumentManager) :
     AbstractDocumentSyncService(project, documentManager) {
-    override suspend fun validate(
+    override fun validate(
         content: String,
         uri: String,
         type: Type
@@ -122,7 +122,7 @@ class DtoDocumentSyncService(project: Project, documentManager: DocumentManager)
 
                         when {
                             project.environment.isKotlinProject -> {
-                                KspGen(module.directory, project.environment, genDir, emptyMap()).dtoFileProcess(
+                                KspGen(module.directory, project.environment.getIndex(), genDir, emptyMap()).dtoFileProcess(
                                     setOf(
                                         dtoFile
                                     )
@@ -130,7 +130,7 @@ class DtoDocumentSyncService(project: Project, documentManager: DocumentManager)
                             }
 
                             project.environment.isJavaProject -> {
-                                AptGen(module.directory, project.environment, genDir, emptyMap()).dtoFileProcess(
+                                AptGen(module.directory, project.environment.getIndex(), genDir, emptyMap()).dtoFileProcess(
                                     setOf(
                                         dtoFile
                                     )

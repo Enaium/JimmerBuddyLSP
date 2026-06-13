@@ -16,8 +16,8 @@
 
 package cn.enaium.jimmer.buddy.codegen.gen
 
+import cn.enaium.jimmer.buddy.lang.parser.index.ClassIndex
 import cn.enaium.jimmer.buddy.codegen.symbol.Source
-import cn.enaium.jimmer.buddy.project.structure.Environment
 import java.nio.file.Path
 import kotlin.io.path.createParentDirectories
 import kotlin.io.path.div
@@ -28,7 +28,7 @@ import kotlin.io.path.writeText
  */
 abstract class Gen(
     val projectDir: Path,
-    val environment: Environment,
+    val classIndex: ClassIndex,
     val genDir: Path,
     val options: Map<String, String>
 ) {

@@ -18,7 +18,7 @@ package cn.enaium.jimmer.buddy.codegen.symbol
 
 import cn.enaium.jimmer.buddy.codegen.utility.*
 import cn.enaium.jimmer.buddy.lang.parser.node.*
-import cn.enaium.jimmer.buddy.project.structure.Environment
+import cn.enaium.jimmer.buddy.lang.parser.index.ClassIndex
 import com.google.devtools.ksp.KspExperimental
 import com.google.devtools.ksp.getClassDeclarationByName
 import com.google.devtools.ksp.processing.*
@@ -33,14 +33,14 @@ import java.io.OutputStream
 /**
  * @author Enaium
  */
-class KspProcessor(val environment: Environment) {
+class KspProcessor(val classIndex: ClassIndex) {
     val caches = mutableMapOf<String, KSClassDeclaration>()
     private val classCache = mutableMapOf<String, BaseClassNode?>()
 
     private fun findClass(qualifiedName: String?): BaseClassNode? {
         if (qualifiedName == null) return null
         return classCache.getOrPut(qualifiedName) {
-            environment.findClass(qualifiedName)
+            classIndex.findClass(qualifiedName)
         }
     }
 
@@ -134,7 +134,7 @@ class KspProcessor(val environment: Environment) {
     }
 
     fun toImmutable(classNode: BaseClassNode): ImmutableType {
-        val (resolver, kspEnvironment, sources) = KspProcessor(this.environment).process(emptySet())
+        val (resolver, kspEnvironment, sources) = KspProcessor(this.classIndex).process(emptySet())
         val context = Context(resolver, kspEnvironment)
         val classDeclarationByName = resolver.getClassDeclarationByName(classNode.qualifiedName)!!
         return context.typeOf(classDeclarationByName)

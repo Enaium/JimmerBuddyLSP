@@ -1,0 +1,12 @@
+id = "jimmer-buddy-lsp"
+name = "JimmerBuddyLSP"
+version = "0.3.0"
+schema_version = 1
+languages = ["languages/jimmer_dto"]
+authors = ["Enaium"]
+description = "A powerful LSP that brings first-class support for Project Jimmer."
+repository = "https://github.com/Enaium/JimmerBuddyLSP"
+
+[language_servers.jimmer_buddy_lsp]
+name = "JimmerBuddyLSP"
+languages = ["Java", "Kotlin", "JimmerDTO"]

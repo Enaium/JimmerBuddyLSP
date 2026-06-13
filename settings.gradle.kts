@@ -10,5 +10,6 @@ include(
     "codegen",
     "formatter",
     "server",
-    ":extensions:vscode"
+    ":extensions:vscode",
+    ":extensions:zed",
 )

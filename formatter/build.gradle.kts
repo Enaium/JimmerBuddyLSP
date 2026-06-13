@@ -13,7 +13,7 @@ tasks.withType<JavaCompile> {
 
 dependencies {
     implementation(libs.antlr)
-    testImplementation(projects.dtoLang)
+    testImplementation(project(":dto-lang"))
     testImplementation(platform("org.junit:junit-bom:5.10.0"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

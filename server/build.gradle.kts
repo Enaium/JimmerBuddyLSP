@@ -5,11 +5,11 @@ plugins {
 }
 
 dependencies {
-    implementation(projects.projectStructure)
-    implementation(projects.langParser)
-    implementation(projects.dtoLang)
-    implementation(projects.codegen)
-    implementation(projects.formatter)
+    implementation(project(":project-structure"))
+    implementation(project(":lang-parser"))
+    implementation(project(":dto-lang"))
+    implementation(project(":codegen"))
+    implementation(project(":formatter"))
     implementation(libs.lsp4j)
     implementation(libs.jackson.dataformat.smile)
     implementation(libs.jackson.module.kotlin)

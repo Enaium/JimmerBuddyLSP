@@ -3,8 +3,8 @@ plugins {
 }
 
 dependencies {
-    implementation(projects.projectStructure)
-    implementation(projects.langParser)
+    implementation(project(":project-structure"))
+    implementation(project(":lang-parser"))
     implementation(libs.coroutines)
     implementation(libs.byte.buddy)
     implementation(libs.kotlinpoet)

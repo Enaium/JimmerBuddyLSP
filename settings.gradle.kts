@@ -3,6 +3,12 @@ plugins {
 }
 rootProject.name = "JimmerBuddyLSP"
 
-include("project-structure", "lang-parser", "dto-lang", "codegen", "formatter", "server")
-
-enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
+include(
+    "project-structure",
+    "lang-parser",
+    "dto-lang",
+    "codegen",
+    "formatter",
+    "server",
+    ":extensions:vscode"
+)

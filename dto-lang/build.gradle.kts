@@ -5,9 +5,9 @@ plugins {
 
 dependencies {
     antlr(libs.antlr)
-    implementation(projects.projectStructure)
-    implementation(projects.langParser)
-    implementation(projects.codegen)
+    implementation(project(":project-structure"))
+    implementation(project(":lang-parser"))
+    implementation(project(":codegen"))
     implementation(libs.javapoet)
     implementation(libs.kotlinpoet)
     implementation(libs.symbol.processing.api)

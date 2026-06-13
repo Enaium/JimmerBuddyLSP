@@ -1,0 +1,58 @@
+{
+  "name": "jimmer-buddy-lsp",
+  "displayName": "Jimmer Buddy LSP",
+  "publisher": "enaium",
+  "author": "Enaium",
+  "version": "0.3.0",
+  "description": "A powerful LSP that brings first-class support for Project Jimmer ",
+  "icon": "icons/logo.png",
+  "main": "out/extensions",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Enaium/JimmerBuddyLSP"
+  },
+  "engines": {
+    "vscode": "^1.120.0"
+  },
+  "activationEvents": [
+    "onLanguage:java",
+    "onLanguage:kotlin",
+    "onLanguage:JimmerDTO"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "JimmerDTO",
+        "extensions": [
+          ".dto"
+        ],
+        "aliases": [
+          "Jimmer DTO"
+        ],
+        "icon": {
+          "light": "./icons/normal.svg",
+          "dark": "./icons/normal.svg"
+        }
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "lint": "eslint",
+    "watch": "tsc -watch -p ./",
+    "package": "tsc -p ./ && vsce package"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.13.0",
+    "@stylistic/eslint-plugin": "^2.9.0",
+    "@types/node": "^22",
+    "@types/vscode": "^1.120.0",
+    "@vscode/vsce": "^3.9.2",
+    "eslint": "^9.13.0",
+    "typescript": "^5.8.2",
+    "typescript-eslint": "^8.26.0"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^10.0.0"
+  }
+}

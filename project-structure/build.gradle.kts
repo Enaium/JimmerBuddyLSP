@@ -3,7 +3,7 @@ plugins {
 }
 
 dependencies {
-    implementation(projects.langParser)
+    implementation(project(":lang-parser"))
     implementation(libs.gradle.tooling.api)
     implementation(libs.jackson.dataformat.smile)
     implementation(libs.jackson.module.kotlin)
